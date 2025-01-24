@@ -1,5 +1,13 @@
 # Overview
 
+In the folder you can find the following:
+| Path | Description |
+| --- | --- |
+| `/enclave_application` | Contains code for an agent application that uses an OpenSSL server that is embedded in an Intel SGX enclave. |
+| `/patches` | Various patch files used in the ODT setup. |
+| `/timing_measurement` | Scripts used to measure the execution speed of the ODT client and ODT server. |
+| `complete-results.ods` | The raw timing measurements and the results. |
+
 The project and testing require the following software:
 - Intel SGX SDK driver
   - We use the out-of-tree driver because our system does not support
@@ -14,70 +22,106 @@ We describe how to install each of them in the next section.
 This is the high-level procedure to setup the project:
 1. Install the Intel SGX SDK driver, SDK and PSW.
 2. Install the Intel SGX SSL library.
-   - Modify the OpenSSL library used by the Intel SGX SSL installation
-      to support ODT client operation.
-3. Compile a modified OpenSSL library that supports ODT server
-   operation.
-4. Compile an agent application that uses an SGX enclave with ODT
-   operations.
+   - Patch the OpenSSL library included with the Intel SGX SSL
+     installation to support ODT client operation.
+3. Download OpenSSL and patch it to support ODT server operation.
+4. Compile an agent application that uses the patched Intel SGX SSL
+   library to connect to the patched ODT server.
 
-Note that we develop on `Manjaro Linux` with the `5.15.155` kernel on
-an `Intel(R) Core(TM) i5-10210U CPU @ 1.60GHz` CPU. For other systems,
-follow the installation instructions found at Github pages of the
-original libraries.
+Note that we developed our prototype on `Manjaro Linux` with the
+`6.6.71-1` kernel on an `Intel(R) Core(TM) i5-10210U CPU @ 1.60GHz`
+CPU. For other systems, follow the installation instructions found at
+Github pages of the original libraries.
 
 ## Intel SGX SDK driver installation
-We install the Intel SGX SDK driver for Manjaro from the [AUR
-repository](https://aur.archlinux.org/packages/linux-sgx-driver-dkms-git).
+The Intel SGX SDK driver should be included in the latest Linux
+kernel. However, it works only for devices that have an SGX CPU with
+Flexible Launch Control (FLC) support.
 
-Due to the older Kernel version we apply the patch
-`patches/PKGBUILD.patch` to the build files. This removes the
-modification that makes the driver fail to install on older kernels.
+Because our CPU does not support FLC, we install the out-of-tree
+driver. We obtain the driver for Manjaro from the [AUR
+repository](https://aur.archlinux.org/packages/linux-sgx-driver-dkms-git). If
+you are using the `6.6.71-1` kernel, it should install without
+errors. Note that it does not compile on newer kernels, and for older
+kernels you can try to apply our `patches/PKGBUILD.patch` to the build
+files.
 
-## Intel SGX SDK & SGX PSW installation
-Clone the repository from: https://github.com/intel/linux-sgx
+## Intel SGX SDK & PSW installation
+Since SGX SDK is not provided for `Manjaro Linux`, we build everything
+from source. For other distributions or preprequisites for manual
+compilation check out the installation instructions in [the
+repository.](https://github.com/intel/linux-sgx). Tip: for most `make`
+commands, you can use the `-j` and `-l` flags to speed up compilation.
 
-1. Compile and install the SGX SDK library as instructed on the Github
-   page.
-   - Install the SDK into the `/opt/intel` directory
-2. Apply the patch `patches/sgx_psw.patch` to the repository (this
-   allows the SGX PSW library to be compiled with newer
-   dependencies). If testing on Ubuntu, it this is probably not
-   necessary.
-3. Switch to a `sudo bash` shell and `source` the
+1. Clone the repository from
+   [here](https://github.com/intel/linux-sgx) and `git checkout`
+   commit `7385e10ce1106215d15f874a024ca224c7417eea`.
+2. Follow the instructions from this [Github
+   issue](https://github.com/intel/linux-sgx/issues/1066) to prepare
+   the repository for compilation on Linux.
+2. Compile and install the SGX SDK library as follows:
+   - `make preparation`
+   - `make sdk`
+   - `make sdk_install_pkg`
+   - Call `./linux/installer/bin/sgx_linux_x64_sdk_2.25.100.3.bin` to
+     start the installation process
+     - Install the SDK into the `/opt/intel` directory
+3. Make sure you are in a `bash` shell and `source` the
    `/opt/intel/sgxsdk/environment` file.
-4. Compile and install the SGX PSW library as instructed on the Github
-   page.
+4. Compile and install the SGX PSW library as follows:
+   - `make psw`
+   - `make psw_install_pkg`
+   - Call `./linux/installer/bin/sgx_linux_x64_psw_2.25.100.3.bin` to
+     start the installation process
 
 ## Intel SGX SSL installation
-Clone the `support_tls_openssl3` branch of the library:
+We use the `support_tls_openssl3` branch of the library:
 https://github.com/intel/intel-sgx-ssl/tree/support_tls_openssl3
 
-1. Switch to `bash` and `source` the `/opt/intel/sgxsdk/environment`
-   file.
-2. Run the make command as instructed to compile the library once.
-3. Modify the `Linux/build_openssl.sh` script as follows:
+1. Clone the repository from
+   [here](https://github.com/intel/intel-sgx-ssl) and `git checkout` the
+   branch `support_tls_openssl3`
+2. Make sure you are in a `bash` shell and `source` the
+   `/opt/intel/sgxsdk/environment` file.
+3. Download the `openssl-3.0.12.tar.gz` archive from
+   [GitHub](https://github.com/openssl/openssl/releases/tag/openssl-3.0.12)
+   and put it into the `openssl_source` directory (leave it archived).
+4. Go back to the root of the repository, `cd` into the `Linux`
+   directory (make sure you are not in the `openssl_source/Linux`
+   directory) and run `make all` once.
+   - The OpenSSL archive is now extraced in the
+     `openssl_source/openssl-3.0.12` directory
+5. Modify the `Linux/build_openssl.sh` script as follows:
 ```bash
 # rm -rf $OPENSSL_VERSION
 # tar xvf $OPENSSL_VERSION.tar.gz || exit 1
 ```
     - Commenting out those lines ensures that our OpenSSL patch in the
-    next step does not get overwritten.
-4. Apply `patches/ODT-client.patch` to the OpenSSL library (version
+      next step does not get overwritten.
+6. Apply `patches/ODT-client.patch` to the OpenSSL library (version
    3.0.12) found in the `openssl_source` directory to add ODT support
    to it.
-   - Run `make all` in the OpenSSL directory to build the OpenSSL
-     library
-5. Run `make all` and `make install` in the `Linux` directory.
+   - Call `patch -p1 < ./path/to/OTD-client.patch` when you are inside
+     of the `openssl_source/openssl-3.0.12`.
+     - Make sure to adjust `./path/to/OTD-client.patch` to the
+       relative path where the `ODT-client.patch` is stored.
+   - Run `make all` twice in the `openssl_source/openssl-3.0.12`
+     directory to build the OpenSSL library
+7. Go back to the `Linux` directory in the root of the repository and
+   run `make all` and `sudo make install`.
 
 ## OpenSSL ODT server setup
-Clone the OpenSSL repository and checkout the `707b54bee2` commit.
+Clone the [OpenSSL repository](https://github.com/openssl/openssl/)
+and checkout the `707b54bee2` commit.
 
-1. Apply `patches/ODT-server.patch` to the OpenSSL library.
-2. Run `make all` in the OpenSSL directory.
+1. Apply `patches/ODT-server.patch` to the OpenSSL library using `git apply`.
+2. Run `./config` and `make all` in the OpenSSL directory.
 
 ## Agent enclave application setup
-Create a build directory inside of the `enclave_application` directory, switch to it, and call:
+Make sure again that you are in a `bash` shell and you have called
+`source /opt/intel/sgxsdk/environment`. Create a `build` directory
+inside of the `enclave_application` directory, switch to it, and call:
+
 ```bash
 cmake ..
 cmake --build .
@@ -96,29 +140,42 @@ are described in the following subsections.
 
 ## ODT client
 
-1. Switch to the agent application build directory.
+1. Switch to the agent application build directory
+   `enclave_application/build`.
 2. Start the application by running the following command:
 ```bash
 ./application aaa -server:127.0.0.1 -port:4433
 ```
-    - Once launched, the application dumps the heap into
+    - Once launched, the application dumps its heap into
       `app_heap_dump`.
     - Copy this file into the root directory of the OpenSSL ODT
       server.
+    - Also, note down the `Heap length: XXXXX` output from the
+      client. In the next section we use the value to tell the web
+      server the lenght of the heap it is measuring.
 3. Start the ODT server according to the next subsection and then
    rerun the ODT client to get a successful verification.
 
 ## ODT server
 
 1. Switch to the OpenSSL ODT server root directory
-2. Generate an RSA key and self-signed certificate
-3. Set the `LD_LIBRARY_PATH` to `.`
-4. Start the ODT server by running the following command:
+2. Set the `LD_LIBRARY_PATH` to `.` by calling `export LD_LIBRARY_PATH .`
+3. Generate an RSA key and self-signed certificate.
+   - `./apps/openssl genrsa -out server.key 4096` generates a key
+   - `./apps/openssl req -new -x509 -key server.key -out
+     server-cert.pem -days 365` generates a self-signed certificate.
+     - You can leave all of the certificate fields empty.
+4. Modify the length of the heap the server expects to measure
+   - In the `Configure` file on line 1729, set the `ODT_HEAP_LENGTH`
+     to the `XXXXX` value noted down in the previous section when
+     running the ODT client.
+   - Call `make all` twice to recompile the library.
+5. Start the ODT server by running the following command:
 ```bash
 ./apps/openssl s_server -key <path_to_key> -cert <path_to_cert> -num_tickets 0 -www -quiet
 ```
-5. Rerun the ODT client. The server should say that the verification
-   was successful.
+6. Rerun the ODT client in a parallel terminal. The server should say
+   that the verification was successful.
 
 
 # Stack verification test
@@ -140,27 +197,47 @@ itself. However, this goes beyond the scope of our prototype.
 
 ## Configuration changes
 
-1. If you ran the agent application in the previous section, you might
-   have noticed that it prints out the stack length and offset of the
-   stack `large_array`.
-2. Open the `Configure` file in the root directory of the ODT OpenSSL
-   server and set `ODT_STACK_LENGTH` and `ODT_STACK_OFFSET` to the
-   aforementioned values.
-   - The offset might not need to be changed, depending on the
-   environment you are working in.
-   - Furthermore, set `ODT_VERIFY_HEAP` to `0` and `ODT_VERIFY_STACK`
-     to `1`.
-   - Recompile the ODT OpenSSL library and start it again.
-3. Open the `Configure` file in the root directory of OpenSSL in the
-   Intel SGX SSL library.
+1. Open the `Configure` file in the `openssl_source/openssl-3.0.12`
+   directory of the Intel SGX SSL library.
    - Set `ODT_VERIFY_HEAP` to `0` and `ODT_VERIFY_STACK` to `1`
-   - Recompile the OpenSSL library. This is necessary to detect
-     changes in the configuration!
-   - Recompile and reinstall the Intel SGX SSL library.
-   - Recompile the agent enclave application.
-4. Disable ASLR by running `echo 0 | sudo tee
+     (line 1646).
+   - Recompile the OpenSSL library by running `make all` twice. This
+     is necessary to detect changes in the configuration.
+   - Recompile and reinstall the Intel SGX SSL library by running
+     `make all` and `sudo make install` in the top level `Linux`
+     directory (not the `openssl_source/Linux` directory).
+2. Open the `CMakeLists.txt` file in the root of the agent application
+   and set `ODT_DUMP_HEAP` and `ODT_PREPARE_HEAP` to `0`, and set
+   `ODT_PREPARE_STACK` to `1`.
+   - Recompile the agent enclave application by calling the following
+     commands in the `build` directory you created in the previous
+     steps:
+```bash
+cmake ..
+cmake --build .
+```
+3. Disable ASLR by running `echo 0 | sudo tee
    /proc/sys/kernel/randomize_va_space`
    - You can enable it again by using `echo 2` instead.
+4. Run the agent application as follows:
+```bash
+./application aaa -server:127.0.0.1 -port:4433
+```
+    - Note down the `Stack length: XXXX` and `Offset of the stack
+      large_array YYYY` values for the next step.
+5. Open the `Configure` file in the root directory of the ODT OpenSSL
+   server and set `ODT_STACK_LENGTH` and `ODT_STACK_OFFSET` to the
+   aforementioned values.
+   - The offset might not need to be changed, depending on your
+     environment.
+   - Furthermore, set `ODT_VERIFY_HEAP` to `0` and `ODT_VERIFY_STACK`
+     to `1`.
+   - Recompile the ODT OpenSSL library and then start the web server
+     (for instructions on how to prepare the key and certificate see
+     server instructions in the previous section):
+```bash
+./apps/openssl s_server -key <path_to_key> -cert <path_to_cert> -num_tickets 0 -www -quiet
+```
 
 You can start the ODT OpenSSL server and run the ODT client
 application to check that stack verification is working properly.
@@ -186,6 +263,7 @@ the agent application for measurement testing.
    application.
    - Set `ODT_DUMP_HEAP` and `ODT_DUMP_STACK` to `0`
    - Set `ODT_PREPARE_STACK` to `0`
+   - Set `ODT_PREPARE_HEAP` to `1`
    - Set `ODT_DEBUG` to `0`
    - Recompile the agent application.
 
@@ -201,29 +279,36 @@ the agent application for measurement testing.
 2. Run the `ODT-client.sh` script from the `timing_measurement` directory
    - The script takes as the first argument the absolute path to the
      `build/` directory of the agent application.
-   - The output of the script is a pair of values.
+   - The output of the script is a pair of values separated by a
+     comma.
      - The first value represents the time taken to create and send
      the heartbeat message.
      - The second value is the total time taken for the application to
      run. This includes starting the enclave and doing a TLS
      handshake.
+   - You can redirect (`>`)the output of the script into a file. Only
+     the measurements will be redirected, the indices are output on
+     standard error.
 
 ## Measuring OpenSSL client performance
 
 1. Same as the first step above.
 2. Run the `openssl-client.sh` script from the `timing_measurement`
    directory.
-   - The script takes as the first argument the absolute path to the
-     root directory of an unmodified OpenSSL library.
+   - The script takes as the first argument the absolute path to a
+     directory where an unmodified OpenSSL library is installed.
+     - We used the system provided library found in `/usr/bin/`
    - The output of the script is a single value. It is the total time
      taken for the OpenSSL client to run a single handshake with the
      server.
+   - Similarly to the previous script, you can store the timing output
+     by redirecting (`>`) it into a file.
 
 ## Measuring ODT server performance
 
 1. Start the modified ODT server.
    - If the `ODT_PERFORM_TIMING_MEASUREMENT` flag is set to `1`, the
-     server outputs a pair of values.
+     server outputs a pair of values separated by a comma.
      - The first values is the total time taken to generate the
      `ServerHello` nonce. This includes calculating `v` and applying
      Elligator to it.
@@ -231,14 +316,17 @@ the agent application for measurement testing.
        to `v`.
      - The difference of these two values is the time taken to
        calculate `v`.
-2. Run the `script-for-server-testing.sh` script from the
+2. WIth the ODT server running, start the `script-for-server-testing.sh` script from the
    `timing_measurement` directory.
    - The script outputs the time the ODT server took to respond to the
-     handshake.
+     handshake from the perspective of an umodified TLS client.
 
 ## Measuring OpenSSL server performance
 
-1. Start the normal OpenSSL server.
+1. Start a normal OpenSSL server.
+   - You can use the same command you use for starting the ODT server,
+     but you need to replace the path to the key and certificate with
+     the correct paths.
 2. Run the `script-for-server-testing.sh` script from the
    `timing_measurement` directory.
    - The script outputs the time the OpenSSL server took to respond to

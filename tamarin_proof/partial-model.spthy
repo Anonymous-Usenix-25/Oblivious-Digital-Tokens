@@ -1,0 +1,3799 @@
+theory ODT begin
+
+// Function signature and definition of the equational theory E
+
+builtins: diffie-hellman
+functions: add/2, adec/2, aenc/2, derive_secret/2, fst/1, h/1,
+           h2/2, h3/1, hmac/2, measure/2, pair/2, pk/1, read/2, sdec/2,
+           select/1, senc/2, sign/2, snd/1, sub/2, true/0, verify/3
+equations [convergent]:
+    adec(aenc(x.1, pk(x.2)), x.2) = x.1,
+    fst(<x.1, x.2>) = x.1,
+    measure(pos, read(pos, prop)) = measure(pos, prop),
+    read(pos, read(pos, prop)) = read(pos, prop),
+    sdec(senc(x.1, x.2), x.2) = x.1,
+    snd(<x.1, x.2>) = x.2,
+    sub(add(x, y), y) = x,
+    verify(sign(x.1, x.2), x.1, pk(x.2)) = true
+
+
+
+heuristic: o "myoracle.py"
+
+
+
+
+
+
+
+
+
+
+
+macros:
+    calculate_witness( int_indicator, ch_pos,
+                       ch_prop ) = h2(int_indicator,measure(ch_pos,ch_prop)),
+    calculate_server_nonce( g2, s, client_nonce,
+                            w ) = add(exp(g2,s),exp(client_nonce,w)),
+    calculate_y( g2, t ) = exp(g2,t),
+    calculate_z( g2, u, t, w,
+                 server_nonce ) = exp(sub(server_nonce,exp(exp(g2,u),w)),t),
+    client_ODT_signature_payload( y, z, OTEE_id,
+                                  client_finished ) = pair(y,pair(z,pair(OTEE_id,client_finished))),
+    client_ODT_response_payload( y, z, signature,
+                                 OTEE_id ) = pair(y,pair(z,pair(signature,OTEE_id))),
+    server_handshake_traffic_secret( DHE ) = derive_secret(DHE,'s_hs_traffic'),
+    client_handshake_traffic_secret( DHE ) = derive_secret(DHE,'c_hs_traffic'),
+    server_finished_key( DHE ) = derive_secret(server_handshake_traffic_secret(DHE),'finished'),
+    client_finished_key( DHE ) = derive_secret(client_handshake_traffic_secret(DHE),'finished'),
+    master_secret( DHE ) = derive_secret(DHE,'derived'),
+    client_application_traffic_secret( DHE ) = derive_secret(master_secret(DHE),'c_ap_traffic'),
+    server_transcript( client_nonce, client_DHE, server_nonce,
+                       server_DHE ) = pair(client_nonce,pair(client_DHE,pair(server_nonce,server_DHE))),
+    server_transcript_hash( client_nonce, client_DHE, server_nonce,
+                            server_DHE ) = h3(server_transcript(client_nonce,client_DHE,server_nonce,server_DHE)),
+    server_certificate_verify_ext( client_nonce, client_DHE,
+                                   server_nonce,
+                                   server_DHE ) = pair(server_transcript(client_nonce,client_DHE,server_nonce,server_DHE),server_transcript_hash(client_nonce,client_DHE,server_nonce,server_DHE)),
+    server_certificate_verify_ext_signed( client_nonce, client_DHE,
+                                          server_nonce, server_DHE,
+                                          server_ltk ) = sign(server_certificate_verify_ext(client_nonce,client_DHE,server_nonce,server_DHE),server_ltk),
+    server_finished( server_certificate_verify_ext_signed,
+                     client_nonce, client_DHE, server_nonce, server_DHE, server_ltk,
+                     DHE ) = hmac(server_finished_key(DHE),pair(server_transcript(client_nonce,client_DHE,server_nonce,server_DHE),server_certificate_verify_ext_signed)),
+    create_encrypted_server_certificate_ext_signed( client_nonce,
+                                                    client_DHE, server_nonce, server_DHE,
+                                                    server_ltk,
+                                                    DHE ) = senc(server_certificate_verify_ext_signed(client_nonce,client_DHE,server_nonce,server_DHE,server_ltk),server_handshake_traffic_secret(DHE)),
+    create_encrypted_server_finished( client_nonce, client_DHE,
+                                      server_nonce, server_DHE, server_ltk,
+                                      DHE ) = senc(server_finished(server_certificate_verify_ext_signed(client_nonce,client_DHE,server_nonce,server_DHE,server_ltk),client_nonce,client_DHE,server_nonce,server_DHE,server_ltk,DHE),server_handshake_traffic_secret(DHE)),
+    client_transcript( client_nonce, client_DHE, server_nonce,
+                       server_DHE,
+                       server_pk ) = pair(client_nonce,pair(client_DHE,pair(server_nonce,pair(server_DHE,server_pk)))),
+    client_transcript_hash( client_nonce, client_DHE, server_nonce,
+                            server_DHE,
+                            server_pk ) = h3(client_transcript(client_nonce,client_DHE,server_nonce,server_DHE,server_pk)),
+    calc_client_finished( client_nonce, client_DHE, server_nonce,
+                          server_DHE, server_pk,
+                          DHE ) = hmac(client_finished_key(DHE),pair(client_transcript(client_nonce,client_DHE,server_nonce,server_DHE,server_pk),client_transcript_hash(client_nonce,client_DHE,server_nonce,server_DHE,server_pk)))
+
+rule (modulo E) NP_Init:
+   [ Fr( ~ltk ) ]
+  --[ InitializeNP( $NP ), InitializeNP_LTK( $NP, ~ltk ) ]->
+   [ !NP_Ltk( $NP, ~ltk ), !NP_Pk( $NP, pk(~ltk) ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Device_Init:
+   [ ] --> [ !Device( $D ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) NP_Register_OTEE_On_Device:
+   [ !Device( $D ), !NP_Ltk( $NP, ~NP_ltk ), Fr( ~OTEE_ltk ) ]
+  --[
+  OTEERegisteredOnDevice( $NP, $OTEE, $D ), Unique( <$NP, $D> ),
+  Unique( $OTEE ), OTEERegisterOTEE( $NP, $OTEE, ~OTEE_ltk )
+  ]->
+   [
+   !OTEE_Ltk( $OTEE, ~OTEE_ltk ), !OTEE_Pk( $OTEE, pk(~OTEE_ltk) ),
+   !OTEE( $OTEE, $D ),
+   Out( <$OTEE, pk(~OTEE_ltk), sign(<$OTEE, pk(~OTEE_ltk)>, ~NP_ltk)>
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Aggressor_Init:
+   [ Fr( ~ltk ) ]
+  --[
+  AggressorInitialized( $AGGR ), AggressorLTK( $AGGR, ~ltk ),
+  AggressorPK( $AGGR, pk(~ltk) )
+  ]->
+   [
+   !AGGR_Ltk( $AGGR, ~ltk ), !AGGR_Pk( $AGGR, pk(~ltk) ),
+   Out( pk(~ltk) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Aggressor_Create_Agent:
+   [ !AGGR_Ltk( $AGGR, ~ltk ), Fr( ~prop ) ]
+  --[ AggressorCreateAgent( $AGGR, $A, ~prop ) ]->
+   [ Aggressor_0( $AGGR, ~prop, $A, ~ltk ), !Agent( $A, ~prop ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Adversary_Create_Agent:
+   [ In( ~prop ) ]
+  --[ AdversaryCreateAgent( $A, ~prop ) ]->
+   [ !Agent( $A, ~prop ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Adversary_Extract_Agent_Properties:
+   [ !Agent( $A, ~prop ), In( positions ) ]
+  --[ AdversaryExtractAgentProperties( $A, ~prop ) ]->
+   [ Out( read(positions, ~prop) ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Device_Run_Agent:
+   [ !Device( $D ), !Agent( $A, ~prop ), Fr( ~aid ) ]
+  --[ DeviceStartRunningAgent( ~aid, $A, $D ) ]->
+   [ !AgentInstance( ~aid, $A, $D, ~prop ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) OTEE_Client_Hello[derivchecks]:
+   [
+   !OTEE( $OTEE, $D ), In( pk(~ltk) ), Fr( ~u ), Fr( ~x_0 ),
+   Fr( ~tee_id )
+   ]
+  --[
+  OTEEStartThread( ~tee_id ), OTEEHello( $OTEE, $D, ~u ),
+  OTEEHelloDH( $OTEE, $D, ~x_0, inv(~x_0), 'g'^~x_0 ),
+  ImpossibleBeforeXCH( ~x_0 ), ImpossibleBeforeXCH( inv(~x_0) ),
+  ImpossibleBeforeXCH( 'g'^~x_0 ),
+  OTEEHelloU( $OTEE, ~u, inv(~u), 'g2'^~u ),
+  ImpossibleBeforeUCH( ~u ), ImpossibleBeforeUCH( inv(~u) ),
+  ImpossibleBeforeUCH( 'g2'^~u ), OTEESession( $OTEE, ~u )
+  ]->
+   [
+   OTEE_0( ~tee_id, $OTEE, 'g', 'g2', $D, ~u, 'g2'^~u, ~x_0, 'g'^~x_0,
+           pk(~ltk)
+   ),
+   Out( <'g2'^~u, 'g'^~x_0> )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Server_Hello[derivchecks]:
+   [
+   Aggressor_0( $AGGR, ~prop, $A, ~ltk ), In( <'g2'^CN, 'g'^~x_0> ),
+   Fr( ~x_1 ), Fr( ~s )
+   ]
+  --[
+  Neq( 'g'^~x_0^~x_1, 'g' ), Neq( 'g'^~x_0^~x_1, DH_neutral ),
+  Neq( 'g'^~x_0, 'g' ), Neq( 'g'^~x_0, DH_neutral ),
+  Neq( 'g2'^CN, 'g2' ), Neq( 'g2'^CN, DH_neutral ),
+  Neq( 'g2'^CN^calculate_witness('0', select('g'^~x_0^~x_1), ~prop),
+       'g2'
+  ),
+  Neq( 'g2'^CN^calculate_witness('0', select('g'^~x_0^~x_1), ~prop),
+       DH_neutral
+  ),
+  Neq( 'g2'^CN, 'g'^~x_0 ), Neq( 'g2'^CN, 'g'^~x_0^~x_1 ),
+  ServerHello( $AGGR, $A ), OUT_Aggressor_0( ~prop ),
+  AggrDH( $AGGR, 'g'^~x_0, ~x_1, 'g'^~x_1 ),
+  AggrDHKey( $AGGR, 'g'^~x_0^~x_1 ), AggrS( $AGGR, ~s ),
+  AggrG2S( $AGGR, 'g2'^~s ),
+  AggrNonce( $AGGR,
+             calculate_server_nonce('g2', ~s, 'g2'^CN,
+                                    calculate_witness('0', select('g'^~x_0^~x_1), ~prop))
+  ),
+  AggrServerHelloPK( $AGGR, ~ltk, pk(~ltk) ),
+  AggrMeasurementSelection( $AGGR, select('g'^~x_0^~x_1) ),
+  AggrKeyUsedForEncryption( $AGGR,
+                            server_handshake_traffic_secret('g'^~x_0^~x_1)
+  ),
+  AggrClientHandshakeKey( client_handshake_traffic_secret('g'^~x_0^~x_1)
+  )
+  ]->
+   [
+   Aggressor_1( $AGGR, 'g', 'g2', ~prop, ~s, $A, ~ltk, 'g2'^CN,
+                'g'^~x_0,
+                calculate_server_nonce('g2', ~s, 'g2'^CN,
+                                       calculate_witness('0', select('g'^~x_0^~x_1), ~prop)),
+                ~x_1, 'g'^~x_1, 'g'^~x_0^~x_1
+   ),
+   Out( <
+         calculate_server_nonce('g2', ~s, 'g2'^CN,
+                                calculate_witness('0', select('g'^~x_0^~x_1), ~prop)),
+         'g'^~x_1,
+         create_encrypted_server_certificate_ext_signed('g2'^CN, 'g'^~x_0,
+                                                        calculate_server_nonce('g2', ~s, 'g2'^CN,
+                                                                               calculate_witness('0',
+                                                                                                 select('g'^~x_0^~x_1),
+                                                                                                 ~prop)),
+                                                        'g'^~x_1, ~ltk, 'g'^~x_0^~x_1),
+         create_encrypted_server_finished('g2'^CN, 'g'^~x_0,
+                                          calculate_server_nonce('g2', ~s, 'g2'^CN,
+                                                                 calculate_witness('0',
+                                                                                   select('g'^~x_0^~x_1),
+                                                                                   ~prop)),
+                                          'g'^~x_1, ~ltk, 'g'^~x_0^~x_1)
+        >
+   )
+   ]
+
+  /*
+  rule (modulo AC) Server_Hello[derivchecks]:
+     [
+     Aggressor_0( $AGGR, ~prop, $A, ~ltk ), In( <z, 'g'^~x> ),
+     Fr( ~x_1 ), Fr( ~s )
+     ]
+    --[
+    Neq( 'g'^(~x*~x_1), 'g' ), Neq( 'g'^(~x*~x_1), DH_neutral ),
+    Neq( 'g'^~x, 'g' ), Neq( 'g'^~x, DH_neutral ), Neq( z, 'g2' ),
+    Neq( z, DH_neutral ), Neq( z.1, 'g2' ), Neq( z.1, DH_neutral ),
+    Neq( z, 'g'^~x ), Neq( z, 'g'^(~x*~x_1) ),
+    ServerHello( $AGGR, $A ), OUT_Aggressor_0( ~prop ),
+    AggrDH( $AGGR, 'g'^~x, ~x_1, 'g'^~x_1 ),
+    AggrDHKey( $AGGR, 'g'^(~x*~x_1) ), AggrS( $AGGR, ~s ),
+    AggrG2S( $AGGR, 'g2'^~s ), AggrNonce( $AGGR, add('g2'^~s, z.1) ),
+    AggrServerHelloPK( $AGGR, ~ltk, pk(~ltk) ),
+    AggrMeasurementSelection( $AGGR, select('g'^(~x*~x_1)) ),
+    AggrKeyUsedForEncryption( $AGGR,
+                              derive_secret('g'^(~x*~x_1), 's_hs_traffic')
+    ),
+    AggrClientHandshakeKey( derive_secret('g'^(~x*~x_1),
+                                          'c_hs_traffic')
+    )
+    ]->
+     [
+     Aggressor_1( $AGGR, 'g', 'g2', ~prop, ~s, $A, ~ltk, z, 'g'^~x,
+                  add('g2'^~s, z.1), ~x_1, 'g'^~x_1, 'g'^(~x*~x_1)
+     ),
+     Out( <add('g2'^~s, z.1), 'g'^~x_1,
+           senc(sign(<<z, 'g'^~x, add('g2'^~s, z.1), 'g'^~x_1>,
+                      h3(<z, 'g'^~x, add('g2'^~s, z.1), 'g'^~x_1>)>,
+                     ~ltk),
+                derive_secret('g'^(~x*~x_1), 's_hs_traffic')),
+           senc(hmac(derive_secret(derive_secret('g'^(~x*~x_1),
+                                                 's_hs_traffic'),
+                                   'finished'),
+                     <<z, 'g'^~x, add('g2'^~s, z.1), 'g'^~x_1>,
+                      sign(<<z, 'g'^~x, add('g2'^~s, z.1), 'g'^~x_1>,
+                            h3(<z, 'g'^~x, add('g2'^~s, z.1), 'g'^~x_1>)>,
+                           ~ltk)
+                     >),
+                derive_secret('g'^(~x*~x_1), 's_hs_traffic'))
+          >
+     )
+     ]
+    variants (modulo AC)
+    1. ~prop = ~prop.42
+       ~x    = ~x.60
+       ~x_1  = ~x_1.45
+       z     = 'g2'
+       z.1   = 'g2'^h2('0',
+                       measure(select('g'^(~x_1.45*~x.60)), ~prop.42))
+
+    2. ~prop = ~prop.42
+       ~x    = ~x.60
+       ~x_1  = ~x_1.45
+       z     = 'g2'^inv(h2('0',
+                           measure(select('g'^(~x_1.45*~x.60)), ~prop.42)))
+       z.1   = 'g2'
+
+    3. ~prop = ~prop.579
+       ~x    = ~x.597
+       ~x_1  = ~x_1.582
+       z     = 'g2'^CN.1153
+       z.1   = 'g2'^(CN.1153*
+                     h2('0', measure(select('g'^(~x_1.582*~x.597)), ~prop.579)))
+
+    4. ~prop = ~prop.583
+       ~x    = ~x.601
+       ~x_1  = ~x_1.586
+       z     = 'g2'^inv((x.1161*
+                         h2('0', measure(select('g'^(~x_1.586*~x.601)), ~prop.583))))
+       z.1   = 'g2'^inv(x.1161)
+
+    5. ~prop = ~prop.583
+       ~x    = ~x.601
+       ~x_1  = ~x_1.586
+       z     = 'g2'^(x.1161*
+                     inv(h2('0', measure(select('g'^(~x_1.586*~x.601)), ~prop.583))))
+       z.1   = 'g2'^x.1161
+
+    6. ~prop = ~prop.584
+       ~x    = ~x.602
+       ~x_1  = ~x_1.587
+       z     = 'g2'^(x.1162*
+                     inv((x.1163*
+                          h2('0', measure(select('g'^(~x_1.587*~x.602)), ~prop.584))))
+                    )
+       z.1   = 'g2'^(x.1162*inv(x.1163))
+  */
+
+rule (modulo E) OTEE_Receive_Server_Hello[derivchecks]:
+   [
+   OTEE_0( ~tee_id, $OTEE, 'g', 'g2', $D, ~u, n_0, ~x_0, X_00, srv_pk
+   ),
+   In( <add('g2'^~e1, 'g2'^e2), 'g'^~x_1,
+        senc(rec_server_certificate_verify_ext_signed,
+             server_handshake_traffic_secret('g'^~x_1^~x_0)),
+        senc(rec_server_finished,
+             server_handshake_traffic_secret('g'^~x_1^~x_0))
+       >
+   )
+   ]
+  --[
+  Eq( verify(rec_server_certificate_verify_ext_signed,
+             server_certificate_verify_ext(n_0, X_00, add('g2'^~e1, 'g2'^e2),
+                                           'g'^~x_1),
+             srv_pk),
+      true
+  ),
+  Eq( rec_server_finished,
+      server_finished(rec_server_certificate_verify_ext_signed, n_0,
+                      X_00, add('g2'^~e1, 'g2'^e2), 'g'^~x_1, srv_pk, 'g'^~x_1^~x_0)
+  ),
+  Neq( 'g'^~x_1^~x_0, 'g'^one ), Neq( 'g'^~x_1^~x_0, DH_neutral ),
+  Neq( 'g'^~x_1^~x_0, 'g'^~x_0 ), Neq( 'g'^~x_1^~x_0, 'g'^~x_1 ),
+  Neq( 'g'^~x_1, 'g2'^one ), Neq( 'g'^~x_1, DH_neutral ),
+  Neq( 'g'^~x_1, 'g2'^~x_0 ), Neq( 'g2'^~e1^e2, 'g2'^one ),
+  Neq( 'g2'^~e1^e2, DH_neutral ), Neq( 'g2'^~e1^e2, 'g'^~x_0 ),
+  Neq( 'g2'^~e1^e2, 'g2'^~x_0 ), Neq( 'g2'^~e1^e2, 'g2'^~u ),
+  Neq( 'g2'^~e1^e2, 'g2'^~u^~x_0 ), Neq( 'g2'^~e1^e2, 'g'^~x_1^~u ),
+  Neq( 'g2'^~e1^e2, 'g'^~x_1^~x_0^~u ), Neq( 'g2'^~e1^e2, 'g'^~x_1 ),
+  Neq( 'g2'^~e1^e2, 'g'^~x_1^~x_0 ),
+  Neq( 'g2'^~e1^e2, 'g2'^inv(~u) ),
+  Neq( 'g2'^~e1^e2, 'g2'^inv(~u)^~x_0 ),
+  Neq( 'g2'^~e1^e2, 'g'^~x_1^inv(~u) ),
+  Neq( 'g2'^~e1^e2, 'g'^~x_1^~x_0^inv(~u) ),
+  OTEEExponents( $OTEE, ~e1, e2 ),
+  OTEEReceiveServerHello( $OTEE, srv_pk, add('g2'^~e1, 'g2'^e2) ),
+  OTEEDHKey( $OTEE, 'g'^~x_1^~x_0 ),
+  OTEEDH( $OTEE, ~x_0, inv(~x_0), 'g'^~x_1 ),
+  OTEESession( $OTEE, ~u ),
+  OTEESessionAggrNonce( $OTEE, ~u, add('g2'^~e1, 'g2'^e2) ),
+  PropertyHelper( $OTEE, ~x_1, ~x_0, 'g'^~x_1^~x_0 ),
+  OTEEServerHandshakeKey( client_handshake_traffic_secret('g'^~x_1^~x_0)
+  )
+  ]->
+   [
+   OTEE_2( ~tee_id, $OTEE, 'g', 'g2', $D, ~u, n_0, ~x_0, X_00,
+           add('g2'^~e1, 'g2'^e2), 'g'^~x_1, 'g'^~x_1^~x_0, srv_pk
+   )
+   ]
+
+  /*
+  rule (modulo AC) OTEE_Receive_Server_Hello[derivchecks]:
+     [
+     OTEE_0( ~tee_id, $OTEE, 'g', 'g2', $D, ~u, n_0, ~x_0, X_00, srv_pk
+     ),
+     In( <add('g2'^~e1, z), 'g'^~x_1,
+          senc(rec_server_certificate_verify_ext_signed,
+               derive_secret('g'^(~x.1*~x.2), 's_hs_traffic')),
+          senc(rec_server_finished,
+               derive_secret('g'^(~x.1*~x.2), 's_hs_traffic'))
+         >
+     )
+     ]
+    --[
+    Eq( z.1, true ),
+    Eq( rec_server_finished,
+        hmac(derive_secret(derive_secret('g'^(~x.1*~x.2), 's_hs_traffic'),
+                           'finished'),
+             <<n_0, X_00, add('g2'^~e1, z), 'g'^~x_1>,
+              rec_server_certificate_verify_ext_signed>)
+    ),
+    Neq( 'g'^(~x.1*~x.2), 'g' ), Neq( 'g'^(~x.1*~x.2), DH_neutral ),
+    Neq( 'g'^(~x.1*~x.2), 'g'^~x_0 ), Neq( 'g'^(~x.1*~x.2), 'g'^~x_1 ),
+    Neq( 'g'^~x_1, 'g2' ), Neq( 'g'^~x_1, DH_neutral ),
+    Neq( 'g'^~x_1, 'g2'^~x_0 ), Neq( z.2, 'g2' ),
+    Neq( z.2, DH_neutral ), Neq( z.2, 'g'^~x_0 ),
+    Neq( z.2, 'g2'^~x_0 ), Neq( z.2, 'g2'^~u ),
+    Neq( z.2, 'g2'^(~u*~x_0) ), Neq( z.2, 'g'^(~u*~x_1) ),
+    Neq( z.2, 'g'^(~u*~x.1*~x.2) ), Neq( z.2, 'g'^~x_1 ),
+    Neq( z.2, 'g'^(~x.1*~x.2) ), Neq( z.2, 'g2'^inv(~u) ),
+    Neq( z.2, z.3 ), Neq( z.2, z.4 ), Neq( z.2, 'g'^x ),
+    OTEEExponents( $OTEE, ~e1, e2 ),
+    OTEEReceiveServerHello( $OTEE, srv_pk, add('g2'^~e1, z) ),
+    OTEEDHKey( $OTEE, 'g'^(~x.1*~x.2) ),
+    OTEEDH( $OTEE, ~x_0, inv(~x_0), 'g'^~x_1 ),
+    OTEESession( $OTEE, ~u ),
+    OTEESessionAggrNonce( $OTEE, ~u, add('g2'^~e1, z) ),
+    PropertyHelper( $OTEE, ~x_1, ~x_0, 'g'^(~x.1*~x.2) ),
+    OTEEServerHandshakeKey( derive_secret('g'^(~x.1*~x.2),
+                                          'c_hs_traffic')
+    )
+    ]->
+     [
+     OTEE_2( ~tee_id, $OTEE, 'g', 'g2', $D, ~u, n_0, ~x_0, X_00,
+             add('g2'^~e1, z), 'g'^~x_1, 'g'^(~x.1*~x.2), srv_pk
+     )
+     ]
+    variants (modulo AC)
+     1. ~e1   = ~e1.94
+        ~u    = ~u.96
+        ~x_0  = ~u.96
+        ~x_1  = ~u.96
+        X_00  = X_00.99
+        e2    = e2.100
+        n_0   = n_0.101
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.102
+        srv_pk
+              = srv_pk.104
+        x     = ~u.96
+        z     = 'g2'^e2.100
+        ~x.1  = ~u.96
+        z.1   = verify(rec_server_certificate_verify_ext_signed.102,
+                       <<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'^e2.100), 'g'^~u.96>,
+                        h3(<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'^e2.100), 'g'^~u.96>)>,
+                       srv_pk.104)
+        ~x.2  = ~u.96
+        z.2   = 'g2'^(~e1.94*e2.100)
+        z.3   = 'g2'
+        z.4   = 'g'
+
+     2. ~e1   = ~e1.94
+        ~u    = ~u.96
+        ~x_0  = ~u.96
+        ~x_1  = ~u.96
+        X_00  = X_00.99
+        e2    = inv(~e1.94)
+        n_0   = n_0.101
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.102
+        srv_pk
+              = srv_pk.104
+        x     = ~u.96
+        z     = 'g2'^inv(~e1.94)
+        ~x.1  = ~u.96
+        z.1   = verify(rec_server_certificate_verify_ext_signed.102,
+                       <
+                        <n_0.101, X_00.99, add('g2'^~e1.94, 'g2'^inv(~e1.94)), 'g'^~u.96>,
+                        h3(<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'^inv(~e1.94)), 'g'^~u.96
+                           >)
+                       >,
+                       srv_pk.104)
+        ~x.2  = ~u.96
+        z.2   = 'g2'
+        z.3   = 'g2'
+        z.4   = 'g'
+
+     3. ~e1   = ~e1.94
+        ~u    = ~u.96
+        ~x_0  = ~u.96
+        ~x_1  = ~u.96
+        X_00  = X_00.99
+        e2    = one
+        n_0   = n_0.101
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.102
+        srv_pk
+              = srv_pk.104
+        x     = ~u.96
+        z     = 'g2'
+        ~x.1  = ~u.96
+        z.1   = verify(rec_server_certificate_verify_ext_signed.102,
+                       <<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'), 'g'^~u.96>,
+                        h3(<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'), 'g'^~u.96>)>,
+                       srv_pk.104)
+        ~x.2  = ~u.96
+        z.2   = 'g2'^~e1.94
+        z.3   = 'g2'
+        z.4   = 'g'
+
+     4. ~e1   = ~e1.94
+        ~u    = ~u.96
+        ~x_0  = ~u.96
+        ~x_1  = ~x_1.98
+        X_00  = X_00.99
+        e2    = e2.100
+        n_0   = n_0.101
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.102
+        srv_pk
+              = srv_pk.104
+        x     = ~x_1.98
+        z     = 'g2'^e2.100
+        ~x.1  = ~u.96
+        z.1   = verify(rec_server_certificate_verify_ext_signed.102,
+                       <<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'^e2.100), 'g'^~x_1.98>,
+                        h3(<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'^e2.100), 'g'^~x_1.98>)
+                       >,
+                       srv_pk.104)
+        ~x.2  = ~x_1.98
+        z.2   = 'g2'^(~e1.94*e2.100)
+        z.3   = 'g2'
+        z.4   = 'g'^(~x_1.98*inv(~u.96))
+
+     5. ~e1   = ~e1.94
+        ~u    = ~u.96
+        ~x_0  = ~u.96
+        ~x_1  = ~x_1.98
+        X_00  = X_00.99
+        e2    = inv(~e1.94)
+        n_0   = n_0.101
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.102
+        srv_pk
+              = srv_pk.104
+        x     = ~x_1.98
+        z     = 'g2'^inv(~e1.94)
+        ~x.1  = ~u.96
+        z.1   = verify(rec_server_certificate_verify_ext_signed.102,
+                       <
+                        <n_0.101, X_00.99, add('g2'^~e1.94, 'g2'^inv(~e1.94)), 'g'^~x_1.98
+                        >,
+                        h3(<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'^inv(~e1.94)),
+                            'g'^~x_1.98>)
+                       >,
+                       srv_pk.104)
+        ~x.2  = ~x_1.98
+        z.2   = 'g2'
+        z.3   = 'g2'
+        z.4   = 'g'^(~x_1.98*inv(~u.96))
+
+     6. ~e1   = ~e1.94
+        ~u    = ~u.96
+        ~x_0  = ~u.96
+        ~x_1  = ~x_1.98
+        X_00  = X_00.99
+        e2    = one
+        n_0   = n_0.101
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.102
+        srv_pk
+              = srv_pk.104
+        x     = ~x_1.98
+        z     = 'g2'
+        ~x.1  = ~u.96
+        z.1   = verify(rec_server_certificate_verify_ext_signed.102,
+                       <<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'), 'g'^~x_1.98>,
+                        h3(<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'), 'g'^~x_1.98>)>,
+                       srv_pk.104)
+        ~x.2  = ~x_1.98
+        z.2   = 'g2'^~e1.94
+        z.3   = 'g2'
+        z.4   = 'g'^(~x_1.98*inv(~u.96))
+
+     7. ~e1   = ~e1.94
+        ~u    = ~u.96
+        ~x_0  = ~x_0.97
+        ~x_1  = ~u.96
+        X_00  = X_00.99
+        e2    = e2.100
+        n_0   = n_0.101
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.102
+        srv_pk
+              = srv_pk.104
+        x     = ~x_0.97
+        z     = 'g2'^e2.100
+        ~x.1  = ~u.96
+        z.1   = verify(rec_server_certificate_verify_ext_signed.102,
+                       <<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'^e2.100), 'g'^~u.96>,
+                        h3(<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'^e2.100), 'g'^~u.96>)>,
+                       srv_pk.104)
+        ~x.2  = ~x_0.97
+        z.2   = 'g2'^(~e1.94*e2.100)
+        z.3   = 'g2'^(~x_0.97*inv(~u.96))
+        z.4   = 'g'
+
+     8. ~e1   = ~e1.94
+        ~u    = ~u.96
+        ~x_0  = ~x_0.97
+        ~x_1  = ~u.96
+        X_00  = X_00.99
+        e2    = inv(~e1.94)
+        n_0   = n_0.101
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.102
+        srv_pk
+              = srv_pk.104
+        x     = ~x_0.97
+        z     = 'g2'^inv(~e1.94)
+        ~x.1  = ~u.96
+        z.1   = verify(rec_server_certificate_verify_ext_signed.102,
+                       <
+                        <n_0.101, X_00.99, add('g2'^~e1.94, 'g2'^inv(~e1.94)), 'g'^~u.96>,
+                        h3(<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'^inv(~e1.94)), 'g'^~u.96
+                           >)
+                       >,
+                       srv_pk.104)
+        ~x.2  = ~x_0.97
+        z.2   = 'g2'
+        z.3   = 'g2'^(~x_0.97*inv(~u.96))
+        z.4   = 'g'
+
+     9. ~e1   = ~e1.94
+        ~u    = ~u.96
+        ~x_0  = ~x_0.97
+        ~x_1  = ~u.96
+        X_00  = X_00.99
+        e2    = one
+        n_0   = n_0.101
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.102
+        srv_pk
+              = srv_pk.104
+        x     = ~x_0.97
+        z     = 'g2'
+        ~x.1  = ~u.96
+        z.1   = verify(rec_server_certificate_verify_ext_signed.102,
+                       <<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'), 'g'^~u.96>,
+                        h3(<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'), 'g'^~u.96>)>,
+                       srv_pk.104)
+        ~x.2  = ~x_0.97
+        z.2   = 'g2'^~e1.94
+        z.3   = 'g2'^(~x_0.97*inv(~u.96))
+        z.4   = 'g'
+
+    10. ~e1   = ~e1.94
+        ~u    = ~u.96
+        ~x_0  = ~x_0.97
+        ~x_1  = ~x_1.98
+        X_00  = X_00.99
+        e2    = e2.100
+        n_0   = n_0.101
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.102
+        srv_pk
+              = srv_pk.104
+        x     = (~x_0.97*~x_1.98*inv(~u.96))
+        z     = 'g2'^e2.100
+        ~x.1  = ~x_0.97
+        z.1   = verify(rec_server_certificate_verify_ext_signed.102,
+                       <<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'^e2.100), 'g'^~x_1.98>,
+                        h3(<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'^e2.100), 'g'^~x_1.98>)
+                       >,
+                       srv_pk.104)
+        ~x.2  = ~x_1.98
+        z.2   = 'g2'^(~e1.94*e2.100)
+        z.3   = 'g2'^(~x_0.97*inv(~u.96))
+        z.4   = 'g'^(~x_1.98*inv(~u.96))
+
+    11. ~e1   = ~e1.94
+        ~u    = ~u.96
+        ~x_0  = ~x_0.97
+        ~x_1  = ~x_1.98
+        X_00  = X_00.99
+        e2    = inv(~e1.94)
+        n_0   = n_0.101
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.102
+        srv_pk
+              = srv_pk.104
+        x     = (~x_0.97*~x_1.98*inv(~u.96))
+        z     = 'g2'^inv(~e1.94)
+        ~x.1  = ~x_0.97
+        z.1   = verify(rec_server_certificate_verify_ext_signed.102,
+                       <
+                        <n_0.101, X_00.99, add('g2'^~e1.94, 'g2'^inv(~e1.94)), 'g'^~x_1.98
+                        >,
+                        h3(<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'^inv(~e1.94)),
+                            'g'^~x_1.98>)
+                       >,
+                       srv_pk.104)
+        ~x.2  = ~x_1.98
+        z.2   = 'g2'
+        z.3   = 'g2'^(~x_0.97*inv(~u.96))
+        z.4   = 'g'^(~x_1.98*inv(~u.96))
+
+    12. ~e1   = ~e1.94
+        ~u    = ~u.96
+        ~x_0  = ~x_0.97
+        ~x_1  = ~x_1.98
+        X_00  = X_00.99
+        e2    = one
+        n_0   = n_0.101
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.102
+        srv_pk
+              = srv_pk.104
+        x     = (~x_0.97*~x_1.98*inv(~u.96))
+        z     = 'g2'
+        ~x.1  = ~x_0.97
+        z.1   = verify(rec_server_certificate_verify_ext_signed.102,
+                       <<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'), 'g'^~x_1.98>,
+                        h3(<n_0.101, X_00.99, add('g2'^~e1.94, 'g2'), 'g'^~x_1.98>)>,
+                       srv_pk.104)
+        ~x.2  = ~x_1.98
+        z.2   = 'g2'^~e1.94
+        z.3   = 'g2'^(~x_0.97*inv(~u.96))
+        z.4   = 'g'^(~x_1.98*inv(~u.96))
+
+    13. ~e1   = ~e1.3560
+        ~u    = ~u.3562
+        ~x_0  = ~u.3562
+        ~x_1  = ~u.3562
+        X_00  = X_00.3565
+        e2    = inv((~e1.3560*x.7116))
+        n_0   = n_0.3567
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.3568
+        srv_pk
+              = srv_pk.3570
+        x     = ~u.3562
+        z     = 'g2'^inv((~e1.3560*x.7116))
+        ~x.1  = ~u.3562
+        z.1   = verify(rec_server_certificate_verify_ext_signed.3568,
+                       <
+                        <n_0.3567, X_00.3565,
+                         add('g2'^~e1.3560, 'g2'^inv((~e1.3560*x.7116))), 'g'^~u.3562>,
+                        h3(<n_0.3567, X_00.3565,
+                            add('g2'^~e1.3560, 'g2'^inv((~e1.3560*x.7116))), 'g'^~u.3562>)
+                       >,
+                       srv_pk.3570)
+        ~x.2  = ~u.3562
+        z.2   = 'g2'^inv(x.7116)
+        z.3   = 'g2'
+        z.4   = 'g'
+
+    14. ~e1   = ~e1.3560
+        ~u    = ~u.3562
+        ~x_0  = ~u.3562
+        ~x_1  = ~u.3562
+        X_00  = X_00.3565
+        e2    = (x.7116*inv(~e1.3560))
+        n_0   = n_0.3567
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.3568
+        srv_pk
+              = srv_pk.3570
+        x     = ~u.3562
+        z     = 'g2'^(x.7116*inv(~e1.3560))
+        ~x.1  = ~u.3562
+        z.1   = verify(rec_server_certificate_verify_ext_signed.3568,
+                       <
+                        <n_0.3567, X_00.3565,
+                         add('g2'^~e1.3560, 'g2'^(x.7116*inv(~e1.3560))), 'g'^~u.3562>,
+                        h3(<n_0.3567, X_00.3565,
+                            add('g2'^~e1.3560, 'g2'^(x.7116*inv(~e1.3560))), 'g'^~u.3562>)
+                       >,
+                       srv_pk.3570)
+        ~x.2  = ~u.3562
+        z.2   = 'g2'^x.7116
+        z.3   = 'g2'
+        z.4   = 'g'
+
+    15. ~e1   = ~e1.3561
+        ~u    = ~u.3563
+        ~x_0  = ~u.3563
+        ~x_1  = ~u.3563
+        X_00  = X_00.3566
+        e2    = inv(~e1.3561)
+        n_0   = n_0.3568
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3568, X_00.3566, add('g2'^~e1.3561, 'g2'^inv(~e1.3561)),
+                       'g'^~u.3563>,
+                      h3(<n_0.3568, X_00.3566, add('g2'^~e1.3561, 'g2'^inv(~e1.3561)),
+                          'g'^~u.3563>)
+                     >,
+                     x.7118)
+        srv_pk
+              = pk(x.7118)
+        x     = ~u.3563
+        z     = 'g2'^inv(~e1.3561)
+        ~x.1  = ~u.3563
+        z.1   = true
+        ~x.2  = ~u.3563
+        z.2   = 'g2'
+        z.3   = 'g2'
+        z.4   = 'g'
+
+    16. ~e1   = ~e1.3561
+        ~u    = ~u.3563
+        ~x_0  = ~u.3563
+        ~x_1  = ~u.3563
+        X_00  = X_00.3566
+        e2    = one
+        n_0   = n_0.3568
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3568, X_00.3566, add('g2'^~e1.3561, 'g2'), 'g'^~u.3563>,
+                      h3(<n_0.3568, X_00.3566, add('g2'^~e1.3561, 'g2'), 'g'^~u.3563>)>,
+                     x.7118)
+        srv_pk
+              = pk(x.7118)
+        x     = ~u.3563
+        z     = 'g2'
+        ~x.1  = ~u.3563
+        z.1   = true
+        ~x.2  = ~u.3563
+        z.2   = 'g2'^~e1.3561
+        z.3   = 'g2'
+        z.4   = 'g'
+
+    17. ~e1   = ~e1.3561
+        ~u    = ~u.3563
+        ~x_0  = ~u.3563
+        ~x_1  = ~u.3563
+        X_00  = X_00.3566
+        e2    = (x.7117*inv((~e1.3561*x.7118)))
+        n_0   = n_0.3568
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.3569
+        srv_pk
+              = srv_pk.3571
+        x     = ~u.3563
+        z     = 'g2'^(x.7117*inv((~e1.3561*x.7118)))
+        ~x.1  = ~u.3563
+        z.1   = verify(rec_server_certificate_verify_ext_signed.3569,
+                       <
+                        <n_0.3568, X_00.3566,
+                         add('g2'^~e1.3561, 'g2'^(x.7117*inv((~e1.3561*x.7118)))),
+                         'g'^~u.3563>,
+                        h3(<n_0.3568, X_00.3566,
+                            add('g2'^~e1.3561, 'g2'^(x.7117*inv((~e1.3561*x.7118)))),
+                            'g'^~u.3563>)
+                       >,
+                       srv_pk.3571)
+        ~x.2  = ~u.3563
+        z.2   = 'g2'^(x.7117*inv(x.7118))
+        z.3   = 'g2'
+        z.4   = 'g'
+
+    18. ~e1   = ~e1.3561
+        ~u    = ~u.3563
+        ~x_0  = ~u.3563
+        ~x_1  = ~x_1.3565
+        X_00  = X_00.3566
+        e2    = inv((~e1.3561*x.7118))
+        n_0   = n_0.3568
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.3569
+        srv_pk
+              = srv_pk.3571
+        x     = ~x_1.3565
+        z     = 'g2'^inv((~e1.3561*x.7118))
+        ~x.1  = ~u.3563
+        z.1   = verify(rec_server_certificate_verify_ext_signed.3569,
+                       <
+                        <n_0.3568, X_00.3566,
+                         add('g2'^~e1.3561, 'g2'^inv((~e1.3561*x.7118))), 'g'^~x_1.3565>,
+                        h3(<n_0.3568, X_00.3566,
+                            add('g2'^~e1.3561, 'g2'^inv((~e1.3561*x.7118))), 'g'^~x_1.3565>)
+                       >,
+                       srv_pk.3571)
+        ~x.2  = ~x_1.3565
+        z.2   = 'g2'^inv(x.7118)
+        z.3   = 'g2'
+        z.4   = 'g'^(~x_1.3565*inv(~u.3563))
+
+    19. ~e1   = ~e1.3561
+        ~u    = ~u.3563
+        ~x_0  = ~u.3563
+        ~x_1  = ~x_1.3565
+        X_00  = X_00.3566
+        e2    = (x.7118*inv(~e1.3561))
+        n_0   = n_0.3568
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.3569
+        srv_pk
+              = srv_pk.3571
+        x     = ~x_1.3565
+        z     = 'g2'^(x.7118*inv(~e1.3561))
+        ~x.1  = ~u.3563
+        z.1   = verify(rec_server_certificate_verify_ext_signed.3569,
+                       <
+                        <n_0.3568, X_00.3566,
+                         add('g2'^~e1.3561, 'g2'^(x.7118*inv(~e1.3561))), 'g'^~x_1.3565>,
+                        h3(<n_0.3568, X_00.3566,
+                            add('g2'^~e1.3561, 'g2'^(x.7118*inv(~e1.3561))), 'g'^~x_1.3565>)
+                       >,
+                       srv_pk.3571)
+        ~x.2  = ~x_1.3565
+        z.2   = 'g2'^x.7118
+        z.3   = 'g2'
+        z.4   = 'g'^(~x_1.3565*inv(~u.3563))
+
+    20. ~e1   = ~e1.3561
+        ~u    = ~u.3563
+        ~x_0  = ~x_0.3564
+        ~x_1  = ~u.3563
+        X_00  = X_00.3566
+        e2    = inv((~e1.3561*x.7118))
+        n_0   = n_0.3568
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.3569
+        srv_pk
+              = srv_pk.3571
+        x     = ~x_0.3564
+        z     = 'g2'^inv((~e1.3561*x.7118))
+        ~x.1  = ~u.3563
+        z.1   = verify(rec_server_certificate_verify_ext_signed.3569,
+                       <
+                        <n_0.3568, X_00.3566,
+                         add('g2'^~e1.3561, 'g2'^inv((~e1.3561*x.7118))), 'g'^~u.3563>,
+                        h3(<n_0.3568, X_00.3566,
+                            add('g2'^~e1.3561, 'g2'^inv((~e1.3561*x.7118))), 'g'^~u.3563>)
+                       >,
+                       srv_pk.3571)
+        ~x.2  = ~x_0.3564
+        z.2   = 'g2'^inv(x.7118)
+        z.3   = 'g2'^(~x_0.3564*inv(~u.3563))
+        z.4   = 'g'
+
+    21. ~e1   = ~e1.3561
+        ~u    = ~u.3563
+        ~x_0  = ~x_0.3564
+        ~x_1  = ~u.3563
+        X_00  = X_00.3566
+        e2    = (x.7118*inv(~e1.3561))
+        n_0   = n_0.3568
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.3569
+        srv_pk
+              = srv_pk.3571
+        x     = ~x_0.3564
+        z     = 'g2'^(x.7118*inv(~e1.3561))
+        ~x.1  = ~u.3563
+        z.1   = verify(rec_server_certificate_verify_ext_signed.3569,
+                       <
+                        <n_0.3568, X_00.3566,
+                         add('g2'^~e1.3561, 'g2'^(x.7118*inv(~e1.3561))), 'g'^~u.3563>,
+                        h3(<n_0.3568, X_00.3566,
+                            add('g2'^~e1.3561, 'g2'^(x.7118*inv(~e1.3561))), 'g'^~u.3563>)
+                       >,
+                       srv_pk.3571)
+        ~x.2  = ~x_0.3564
+        z.2   = 'g2'^x.7118
+        z.3   = 'g2'^(~x_0.3564*inv(~u.3563))
+        z.4   = 'g'
+
+    22. ~e1   = ~e1.3562
+        ~u    = ~u.3564
+        ~x_0  = ~u.3564
+        ~x_1  = ~u.3564
+        X_00  = X_00.3567
+        e2    = e2.3568
+        n_0   = n_0.3569
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3569, X_00.3567, add('g2'^~e1.3562, 'g2'^e2.3568), 'g'^~u.3564
+                      >,
+                      h3(<n_0.3569, X_00.3567, add('g2'^~e1.3562, 'g2'^e2.3568),
+                          'g'^~u.3564>)
+                     >,
+                     x.7120)
+        srv_pk
+              = pk(x.7120)
+        x     = ~u.3564
+        z     = 'g2'^e2.3568
+        ~x.1  = ~u.3564
+        z.1   = true
+        ~x.2  = ~u.3564
+        z.2   = 'g2'^(~e1.3562*e2.3568)
+        z.3   = 'g2'
+        z.4   = 'g'
+
+    23. ~e1   = ~e1.3562
+        ~u    = ~u.3564
+        ~x_0  = ~u.3564
+        ~x_1  = ~u.3564
+        X_00  = X_00.3567
+        e2    = inv((~e1.3562*x.7118))
+        n_0   = n_0.3569
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3569, X_00.3567,
+                       add('g2'^~e1.3562, 'g2'^inv((~e1.3562*x.7118))), 'g'^~u.3564>,
+                      h3(<n_0.3569, X_00.3567,
+                          add('g2'^~e1.3562, 'g2'^inv((~e1.3562*x.7118))), 'g'^~u.3564>)
+                     >,
+                     x.7120)
+        srv_pk
+              = pk(x.7120)
+        x     = ~u.3564
+        z     = 'g2'^inv((~e1.3562*x.7118))
+        ~x.1  = ~u.3564
+        z.1   = true
+        ~x.2  = ~u.3564
+        z.2   = 'g2'^inv(x.7118)
+        z.3   = 'g2'
+        z.4   = 'g'
+
+    24. ~e1   = ~e1.3562
+        ~u    = ~u.3564
+        ~x_0  = ~u.3564
+        ~x_1  = ~u.3564
+        X_00  = X_00.3567
+        e2    = (x.7118*inv(~e1.3562))
+        n_0   = n_0.3569
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3569, X_00.3567,
+                       add('g2'^~e1.3562, 'g2'^(x.7118*inv(~e1.3562))), 'g'^~u.3564>,
+                      h3(<n_0.3569, X_00.3567,
+                          add('g2'^~e1.3562, 'g2'^(x.7118*inv(~e1.3562))), 'g'^~u.3564>)
+                     >,
+                     x.7120)
+        srv_pk
+              = pk(x.7120)
+        x     = ~u.3564
+        z     = 'g2'^(x.7118*inv(~e1.3562))
+        ~x.1  = ~u.3564
+        z.1   = true
+        ~x.2  = ~u.3564
+        z.2   = 'g2'^x.7118
+        z.3   = 'g2'
+        z.4   = 'g'
+
+    25. ~e1   = ~e1.3562
+        ~u    = ~u.3564
+        ~x_0  = ~u.3564
+        ~x_1  = ~x_1.3566
+        X_00  = X_00.3567
+        e2    = inv(~e1.3562)
+        n_0   = n_0.3569
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3569, X_00.3567, add('g2'^~e1.3562, 'g2'^inv(~e1.3562)),
+                       'g'^~x_1.3566>,
+                      h3(<n_0.3569, X_00.3567, add('g2'^~e1.3562, 'g2'^inv(~e1.3562)),
+                          'g'^~x_1.3566>)
+                     >,
+                     x.7120)
+        srv_pk
+              = pk(x.7120)
+        x     = ~x_1.3566
+        z     = 'g2'^inv(~e1.3562)
+        ~x.1  = ~u.3564
+        z.1   = true
+        ~x.2  = ~x_1.3566
+        z.2   = 'g2'
+        z.3   = 'g2'
+        z.4   = 'g'^(~x_1.3566*inv(~u.3564))
+
+    26. ~e1   = ~e1.3562
+        ~u    = ~u.3564
+        ~x_0  = ~u.3564
+        ~x_1  = ~x_1.3566
+        X_00  = X_00.3567
+        e2    = one
+        n_0   = n_0.3569
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3569, X_00.3567, add('g2'^~e1.3562, 'g2'), 'g'^~x_1.3566>,
+                      h3(<n_0.3569, X_00.3567, add('g2'^~e1.3562, 'g2'), 'g'^~x_1.3566>)
+                     >,
+                     x.7120)
+        srv_pk
+              = pk(x.7120)
+        x     = ~x_1.3566
+        z     = 'g2'
+        ~x.1  = ~u.3564
+        z.1   = true
+        ~x.2  = ~x_1.3566
+        z.2   = 'g2'^~e1.3562
+        z.3   = 'g2'
+        z.4   = 'g'^(~x_1.3566*inv(~u.3564))
+
+    27. ~e1   = ~e1.3562
+        ~u    = ~u.3564
+        ~x_0  = ~u.3564
+        ~x_1  = ~x_1.3566
+        X_00  = X_00.3567
+        e2    = (x.7119*inv((~e1.3562*x.7120)))
+        n_0   = n_0.3569
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.3570
+        srv_pk
+              = srv_pk.3572
+        x     = ~x_1.3566
+        z     = 'g2'^(x.7119*inv((~e1.3562*x.7120)))
+        ~x.1  = ~u.3564
+        z.1   = verify(rec_server_certificate_verify_ext_signed.3570,
+                       <
+                        <n_0.3569, X_00.3567,
+                         add('g2'^~e1.3562, 'g2'^(x.7119*inv((~e1.3562*x.7120)))),
+                         'g'^~x_1.3566>,
+                        h3(<n_0.3569, X_00.3567,
+                            add('g2'^~e1.3562, 'g2'^(x.7119*inv((~e1.3562*x.7120)))),
+                            'g'^~x_1.3566>)
+                       >,
+                       srv_pk.3572)
+        ~x.2  = ~x_1.3566
+        z.2   = 'g2'^(x.7119*inv(x.7120))
+        z.3   = 'g2'
+        z.4   = 'g'^(~x_1.3566*inv(~u.3564))
+
+    28. ~e1   = ~e1.3562
+        ~u    = ~u.3564
+        ~x_0  = ~x_0.3565
+        ~x_1  = ~u.3564
+        X_00  = X_00.3567
+        e2    = inv(~e1.3562)
+        n_0   = n_0.3569
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3569, X_00.3567, add('g2'^~e1.3562, 'g2'^inv(~e1.3562)),
+                       'g'^~u.3564>,
+                      h3(<n_0.3569, X_00.3567, add('g2'^~e1.3562, 'g2'^inv(~e1.3562)),
+                          'g'^~u.3564>)
+                     >,
+                     x.7120)
+        srv_pk
+              = pk(x.7120)
+        x     = ~x_0.3565
+        z     = 'g2'^inv(~e1.3562)
+        ~x.1  = ~u.3564
+        z.1   = true
+        ~x.2  = ~x_0.3565
+        z.2   = 'g2'
+        z.3   = 'g2'^(~x_0.3565*inv(~u.3564))
+        z.4   = 'g'
+
+    29. ~e1   = ~e1.3562
+        ~u    = ~u.3564
+        ~x_0  = ~x_0.3565
+        ~x_1  = ~u.3564
+        X_00  = X_00.3567
+        e2    = one
+        n_0   = n_0.3569
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3569, X_00.3567, add('g2'^~e1.3562, 'g2'), 'g'^~u.3564>,
+                      h3(<n_0.3569, X_00.3567, add('g2'^~e1.3562, 'g2'), 'g'^~u.3564>)>,
+                     x.7120)
+        srv_pk
+              = pk(x.7120)
+        x     = ~x_0.3565
+        z     = 'g2'
+        ~x.1  = ~u.3564
+        z.1   = true
+        ~x.2  = ~x_0.3565
+        z.2   = 'g2'^~e1.3562
+        z.3   = 'g2'^(~x_0.3565*inv(~u.3564))
+        z.4   = 'g'
+
+    30. ~e1   = ~e1.3562
+        ~u    = ~u.3564
+        ~x_0  = ~x_0.3565
+        ~x_1  = ~u.3564
+        X_00  = X_00.3567
+        e2    = (x.7119*inv((~e1.3562*x.7120)))
+        n_0   = n_0.3569
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.3570
+        srv_pk
+              = srv_pk.3572
+        x     = ~x_0.3565
+        z     = 'g2'^(x.7119*inv((~e1.3562*x.7120)))
+        ~x.1  = ~u.3564
+        z.1   = verify(rec_server_certificate_verify_ext_signed.3570,
+                       <
+                        <n_0.3569, X_00.3567,
+                         add('g2'^~e1.3562, 'g2'^(x.7119*inv((~e1.3562*x.7120)))),
+                         'g'^~u.3564>,
+                        h3(<n_0.3569, X_00.3567,
+                            add('g2'^~e1.3562, 'g2'^(x.7119*inv((~e1.3562*x.7120)))),
+                            'g'^~u.3564>)
+                       >,
+                       srv_pk.3572)
+        ~x.2  = ~x_0.3565
+        z.2   = 'g2'^(x.7119*inv(x.7120))
+        z.3   = 'g2'^(~x_0.3565*inv(~u.3564))
+        z.4   = 'g'
+
+    31. ~e1   = ~e1.3562
+        ~u    = ~u.3564
+        ~x_0  = ~x_0.3565
+        ~x_1  = ~x_1.3566
+        X_00  = X_00.3567
+        e2    = inv((~e1.3562*x.7120))
+        n_0   = n_0.3569
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.3570
+        srv_pk
+              = srv_pk.3572
+        x     = (~x_0.3565*~x_1.3566*inv(~u.3564))
+        z     = 'g2'^inv((~e1.3562*x.7120))
+        ~x.1  = ~x_0.3565
+        z.1   = verify(rec_server_certificate_verify_ext_signed.3570,
+                       <
+                        <n_0.3569, X_00.3567,
+                         add('g2'^~e1.3562, 'g2'^inv((~e1.3562*x.7120))), 'g'^~x_1.3566>,
+                        h3(<n_0.3569, X_00.3567,
+                            add('g2'^~e1.3562, 'g2'^inv((~e1.3562*x.7120))), 'g'^~x_1.3566>)
+                       >,
+                       srv_pk.3572)
+        ~x.2  = ~x_1.3566
+        z.2   = 'g2'^inv(x.7120)
+        z.3   = 'g2'^(~x_0.3565*inv(~u.3564))
+        z.4   = 'g'^(~x_1.3566*inv(~u.3564))
+
+    32. ~e1   = ~e1.3562
+        ~u    = ~u.3564
+        ~x_0  = ~x_0.3565
+        ~x_1  = ~x_1.3566
+        X_00  = X_00.3567
+        e2    = (x.7120*inv(~e1.3562))
+        n_0   = n_0.3569
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.3570
+        srv_pk
+              = srv_pk.3572
+        x     = (~x_0.3565*~x_1.3566*inv(~u.3564))
+        z     = 'g2'^(x.7120*inv(~e1.3562))
+        ~x.1  = ~x_0.3565
+        z.1   = verify(rec_server_certificate_verify_ext_signed.3570,
+                       <
+                        <n_0.3569, X_00.3567,
+                         add('g2'^~e1.3562, 'g2'^(x.7120*inv(~e1.3562))), 'g'^~x_1.3566>,
+                        h3(<n_0.3569, X_00.3567,
+                            add('g2'^~e1.3562, 'g2'^(x.7120*inv(~e1.3562))), 'g'^~x_1.3566>)
+                       >,
+                       srv_pk.3572)
+        ~x.2  = ~x_1.3566
+        z.2   = 'g2'^x.7120
+        z.3   = 'g2'^(~x_0.3565*inv(~u.3564))
+        z.4   = 'g'^(~x_1.3566*inv(~u.3564))
+
+    33. ~e1   = ~e1.3563
+        ~u    = ~u.3565
+        ~x_0  = ~u.3565
+        ~x_1  = ~u.3565
+        X_00  = X_00.3568
+        e2    = (x.7119*inv((~e1.3563*x.7120)))
+        n_0   = n_0.3570
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3570, X_00.3568,
+                       add('g2'^~e1.3563, 'g2'^(x.7119*inv((~e1.3563*x.7120)))),
+                       'g'^~u.3565>,
+                      h3(<n_0.3570, X_00.3568,
+                          add('g2'^~e1.3563, 'g2'^(x.7119*inv((~e1.3563*x.7120)))),
+                          'g'^~u.3565>)
+                     >,
+                     x.7122)
+        srv_pk
+              = pk(x.7122)
+        x     = ~u.3565
+        z     = 'g2'^(x.7119*inv((~e1.3563*x.7120)))
+        ~x.1  = ~u.3565
+        z.1   = true
+        ~x.2  = ~u.3565
+        z.2   = 'g2'^(x.7119*inv(x.7120))
+        z.3   = 'g2'
+        z.4   = 'g'
+
+    34. ~e1   = ~e1.3563
+        ~u    = ~u.3565
+        ~x_0  = ~u.3565
+        ~x_1  = ~x_1.3567
+        X_00  = X_00.3568
+        e2    = e2.3569
+        n_0   = n_0.3570
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3570, X_00.3568, add('g2'^~e1.3563, 'g2'^e2.3569),
+                       'g'^~x_1.3567>,
+                      h3(<n_0.3570, X_00.3568, add('g2'^~e1.3563, 'g2'^e2.3569),
+                          'g'^~x_1.3567>)
+                     >,
+                     x.7122)
+        srv_pk
+              = pk(x.7122)
+        x     = ~x_1.3567
+        z     = 'g2'^e2.3569
+        ~x.1  = ~u.3565
+        z.1   = true
+        ~x.2  = ~x_1.3567
+        z.2   = 'g2'^(~e1.3563*e2.3569)
+        z.3   = 'g2'
+        z.4   = 'g'^(~x_1.3567*inv(~u.3565))
+
+    35. ~e1   = ~e1.3563
+        ~u    = ~u.3565
+        ~x_0  = ~u.3565
+        ~x_1  = ~x_1.3567
+        X_00  = X_00.3568
+        e2    = inv((~e1.3563*x.7120))
+        n_0   = n_0.3570
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3570, X_00.3568,
+                       add('g2'^~e1.3563, 'g2'^inv((~e1.3563*x.7120))), 'g'^~x_1.3567>,
+                      h3(<n_0.3570, X_00.3568,
+                          add('g2'^~e1.3563, 'g2'^inv((~e1.3563*x.7120))), 'g'^~x_1.3567>)
+                     >,
+                     x.7122)
+        srv_pk
+              = pk(x.7122)
+        x     = ~x_1.3567
+        z     = 'g2'^inv((~e1.3563*x.7120))
+        ~x.1  = ~u.3565
+        z.1   = true
+        ~x.2  = ~x_1.3567
+        z.2   = 'g2'^inv(x.7120)
+        z.3   = 'g2'
+        z.4   = 'g'^(~x_1.3567*inv(~u.3565))
+
+    36. ~e1   = ~e1.3563
+        ~u    = ~u.3565
+        ~x_0  = ~u.3565
+        ~x_1  = ~x_1.3567
+        X_00  = X_00.3568
+        e2    = (x.7120*inv(~e1.3563))
+        n_0   = n_0.3570
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3570, X_00.3568,
+                       add('g2'^~e1.3563, 'g2'^(x.7120*inv(~e1.3563))), 'g'^~x_1.3567>,
+                      h3(<n_0.3570, X_00.3568,
+                          add('g2'^~e1.3563, 'g2'^(x.7120*inv(~e1.3563))), 'g'^~x_1.3567>)
+                     >,
+                     x.7122)
+        srv_pk
+              = pk(x.7122)
+        x     = ~x_1.3567
+        z     = 'g2'^(x.7120*inv(~e1.3563))
+        ~x.1  = ~u.3565
+        z.1   = true
+        ~x.2  = ~x_1.3567
+        z.2   = 'g2'^x.7120
+        z.3   = 'g2'
+        z.4   = 'g'^(~x_1.3567*inv(~u.3565))
+
+    37. ~e1   = ~e1.3563
+        ~u    = ~u.3565
+        ~x_0  = ~x_0.3566
+        ~x_1  = ~u.3565
+        X_00  = X_00.3568
+        e2    = e2.3569
+        n_0   = n_0.3570
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3570, X_00.3568, add('g2'^~e1.3563, 'g2'^e2.3569), 'g'^~u.3565
+                      >,
+                      h3(<n_0.3570, X_00.3568, add('g2'^~e1.3563, 'g2'^e2.3569),
+                          'g'^~u.3565>)
+                     >,
+                     x.7122)
+        srv_pk
+              = pk(x.7122)
+        x     = ~x_0.3566
+        z     = 'g2'^e2.3569
+        ~x.1  = ~u.3565
+        z.1   = true
+        ~x.2  = ~x_0.3566
+        z.2   = 'g2'^(~e1.3563*e2.3569)
+        z.3   = 'g2'^(~x_0.3566*inv(~u.3565))
+        z.4   = 'g'
+
+    38. ~e1   = ~e1.3563
+        ~u    = ~u.3565
+        ~x_0  = ~x_0.3566
+        ~x_1  = ~u.3565
+        X_00  = X_00.3568
+        e2    = inv((~e1.3563*x.7120))
+        n_0   = n_0.3570
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3570, X_00.3568,
+                       add('g2'^~e1.3563, 'g2'^inv((~e1.3563*x.7120))), 'g'^~u.3565>,
+                      h3(<n_0.3570, X_00.3568,
+                          add('g2'^~e1.3563, 'g2'^inv((~e1.3563*x.7120))), 'g'^~u.3565>)
+                     >,
+                     x.7122)
+        srv_pk
+              = pk(x.7122)
+        x     = ~x_0.3566
+        z     = 'g2'^inv((~e1.3563*x.7120))
+        ~x.1  = ~u.3565
+        z.1   = true
+        ~x.2  = ~x_0.3566
+        z.2   = 'g2'^inv(x.7120)
+        z.3   = 'g2'^(~x_0.3566*inv(~u.3565))
+        z.4   = 'g'
+
+    39. ~e1   = ~e1.3563
+        ~u    = ~u.3565
+        ~x_0  = ~x_0.3566
+        ~x_1  = ~u.3565
+        X_00  = X_00.3568
+        e2    = (x.7120*inv(~e1.3563))
+        n_0   = n_0.3570
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3570, X_00.3568,
+                       add('g2'^~e1.3563, 'g2'^(x.7120*inv(~e1.3563))), 'g'^~u.3565>,
+                      h3(<n_0.3570, X_00.3568,
+                          add('g2'^~e1.3563, 'g2'^(x.7120*inv(~e1.3563))), 'g'^~u.3565>)
+                     >,
+                     x.7122)
+        srv_pk
+              = pk(x.7122)
+        x     = ~x_0.3566
+        z     = 'g2'^(x.7120*inv(~e1.3563))
+        ~x.1  = ~u.3565
+        z.1   = true
+        ~x.2  = ~x_0.3566
+        z.2   = 'g2'^x.7120
+        z.3   = 'g2'^(~x_0.3566*inv(~u.3565))
+        z.4   = 'g'
+
+    40. ~e1   = ~e1.3563
+        ~u    = ~u.3565
+        ~x_0  = ~x_0.3566
+        ~x_1  = ~x_1.3567
+        X_00  = X_00.3568
+        e2    = inv(~e1.3563)
+        n_0   = n_0.3570
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3570, X_00.3568, add('g2'^~e1.3563, 'g2'^inv(~e1.3563)),
+                       'g'^~x_1.3567>,
+                      h3(<n_0.3570, X_00.3568, add('g2'^~e1.3563, 'g2'^inv(~e1.3563)),
+                          'g'^~x_1.3567>)
+                     >,
+                     x.7122)
+        srv_pk
+              = pk(x.7122)
+        x     = (~x_0.3566*~x_1.3567*inv(~u.3565))
+        z     = 'g2'^inv(~e1.3563)
+        ~x.1  = ~x_0.3566
+        z.1   = true
+        ~x.2  = ~x_1.3567
+        z.2   = 'g2'
+        z.3   = 'g2'^(~x_0.3566*inv(~u.3565))
+        z.4   = 'g'^(~x_1.3567*inv(~u.3565))
+
+    41. ~e1   = ~e1.3563
+        ~u    = ~u.3565
+        ~x_0  = ~x_0.3566
+        ~x_1  = ~x_1.3567
+        X_00  = X_00.3568
+        e2    = one
+        n_0   = n_0.3570
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3570, X_00.3568, add('g2'^~e1.3563, 'g2'), 'g'^~x_1.3567>,
+                      h3(<n_0.3570, X_00.3568, add('g2'^~e1.3563, 'g2'), 'g'^~x_1.3567>)
+                     >,
+                     x.7122)
+        srv_pk
+              = pk(x.7122)
+        x     = (~x_0.3566*~x_1.3567*inv(~u.3565))
+        z     = 'g2'
+        ~x.1  = ~x_0.3566
+        z.1   = true
+        ~x.2  = ~x_1.3567
+        z.2   = 'g2'^~e1.3563
+        z.3   = 'g2'^(~x_0.3566*inv(~u.3565))
+        z.4   = 'g'^(~x_1.3567*inv(~u.3565))
+
+    42. ~e1   = ~e1.3563
+        ~u    = ~u.3565
+        ~x_0  = ~x_0.3566
+        ~x_1  = ~x_1.3567
+        X_00  = X_00.3568
+        e2    = (x.7121*inv((~e1.3563*x.7122)))
+        n_0   = n_0.3570
+        rec_server_certificate_verify_ext_signed
+              = rec_server_certificate_verify_ext_signed.3571
+        srv_pk
+              = srv_pk.3573
+        x     = (~x_0.3566*~x_1.3567*inv(~u.3565))
+        z     = 'g2'^(x.7121*inv((~e1.3563*x.7122)))
+        ~x.1  = ~x_0.3566
+        z.1   = verify(rec_server_certificate_verify_ext_signed.3571,
+                       <
+                        <n_0.3570, X_00.3568,
+                         add('g2'^~e1.3563, 'g2'^(x.7121*inv((~e1.3563*x.7122)))),
+                         'g'^~x_1.3567>,
+                        h3(<n_0.3570, X_00.3568,
+                            add('g2'^~e1.3563, 'g2'^(x.7121*inv((~e1.3563*x.7122)))),
+                            'g'^~x_1.3567>)
+                       >,
+                       srv_pk.3573)
+        ~x.2  = ~x_1.3567
+        z.2   = 'g2'^(x.7121*inv(x.7122))
+        z.3   = 'g2'^(~x_0.3566*inv(~u.3565))
+        z.4   = 'g'^(~x_1.3567*inv(~u.3565))
+
+    43. ~e1   = ~e1.3564
+        ~u    = ~u.3566
+        ~x_0  = ~u.3566
+        ~x_1  = ~x_1.3568
+        X_00  = X_00.3569
+        e2    = (x.7121*inv((~e1.3564*x.7122)))
+        n_0   = n_0.3571
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3571, X_00.3569,
+                       add('g2'^~e1.3564, 'g2'^(x.7121*inv((~e1.3564*x.7122)))),
+                       'g'^~x_1.3568>,
+                      h3(<n_0.3571, X_00.3569,
+                          add('g2'^~e1.3564, 'g2'^(x.7121*inv((~e1.3564*x.7122)))),
+                          'g'^~x_1.3568>)
+                     >,
+                     x.7124)
+        srv_pk
+              = pk(x.7124)
+        x     = ~x_1.3568
+        z     = 'g2'^(x.7121*inv((~e1.3564*x.7122)))
+        ~x.1  = ~u.3566
+        z.1   = true
+        ~x.2  = ~x_1.3568
+        z.2   = 'g2'^(x.7121*inv(x.7122))
+        z.3   = 'g2'
+        z.4   = 'g'^(~x_1.3568*inv(~u.3566))
+
+    44. ~e1   = ~e1.3564
+        ~u    = ~u.3566
+        ~x_0  = ~x_0.3567
+        ~x_1  = ~u.3566
+        X_00  = X_00.3569
+        e2    = (x.7121*inv((~e1.3564*x.7122)))
+        n_0   = n_0.3571
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3571, X_00.3569,
+                       add('g2'^~e1.3564, 'g2'^(x.7121*inv((~e1.3564*x.7122)))),
+                       'g'^~u.3566>,
+                      h3(<n_0.3571, X_00.3569,
+                          add('g2'^~e1.3564, 'g2'^(x.7121*inv((~e1.3564*x.7122)))),
+                          'g'^~u.3566>)
+                     >,
+                     x.7124)
+        srv_pk
+              = pk(x.7124)
+        x     = ~x_0.3567
+        z     = 'g2'^(x.7121*inv((~e1.3564*x.7122)))
+        ~x.1  = ~u.3566
+        z.1   = true
+        ~x.2  = ~x_0.3567
+        z.2   = 'g2'^(x.7121*inv(x.7122))
+        z.3   = 'g2'^(~x_0.3567*inv(~u.3566))
+        z.4   = 'g'
+
+    45. ~e1   = ~e1.3564
+        ~u    = ~u.3566
+        ~x_0  = ~x_0.3567
+        ~x_1  = ~x_1.3568
+        X_00  = X_00.3569
+        e2    = e2.3570
+        n_0   = n_0.3571
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3571, X_00.3569, add('g2'^~e1.3564, 'g2'^e2.3570),
+                       'g'^~x_1.3568>,
+                      h3(<n_0.3571, X_00.3569, add('g2'^~e1.3564, 'g2'^e2.3570),
+                          'g'^~x_1.3568>)
+                     >,
+                     x.7124)
+        srv_pk
+              = pk(x.7124)
+        x     = (~x_0.3567*~x_1.3568*inv(~u.3566))
+        z     = 'g2'^e2.3570
+        ~x.1  = ~x_0.3567
+        z.1   = true
+        ~x.2  = ~x_1.3568
+        z.2   = 'g2'^(~e1.3564*e2.3570)
+        z.3   = 'g2'^(~x_0.3567*inv(~u.3566))
+        z.4   = 'g'^(~x_1.3568*inv(~u.3566))
+
+    46. ~e1   = ~e1.3564
+        ~u    = ~u.3566
+        ~x_0  = ~x_0.3567
+        ~x_1  = ~x_1.3568
+        X_00  = X_00.3569
+        e2    = inv((~e1.3564*x.7122))
+        n_0   = n_0.3571
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3571, X_00.3569,
+                       add('g2'^~e1.3564, 'g2'^inv((~e1.3564*x.7122))), 'g'^~x_1.3568>,
+                      h3(<n_0.3571, X_00.3569,
+                          add('g2'^~e1.3564, 'g2'^inv((~e1.3564*x.7122))), 'g'^~x_1.3568>)
+                     >,
+                     x.7124)
+        srv_pk
+              = pk(x.7124)
+        x     = (~x_0.3567*~x_1.3568*inv(~u.3566))
+        z     = 'g2'^inv((~e1.3564*x.7122))
+        ~x.1  = ~x_0.3567
+        z.1   = true
+        ~x.2  = ~x_1.3568
+        z.2   = 'g2'^inv(x.7122)
+        z.3   = 'g2'^(~x_0.3567*inv(~u.3566))
+        z.4   = 'g'^(~x_1.3568*inv(~u.3566))
+
+    47. ~e1   = ~e1.3564
+        ~u    = ~u.3566
+        ~x_0  = ~x_0.3567
+        ~x_1  = ~x_1.3568
+        X_00  = X_00.3569
+        e2    = (x.7122*inv(~e1.3564))
+        n_0   = n_0.3571
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3571, X_00.3569,
+                       add('g2'^~e1.3564, 'g2'^(x.7122*inv(~e1.3564))), 'g'^~x_1.3568>,
+                      h3(<n_0.3571, X_00.3569,
+                          add('g2'^~e1.3564, 'g2'^(x.7122*inv(~e1.3564))), 'g'^~x_1.3568>)
+                     >,
+                     x.7124)
+        srv_pk
+              = pk(x.7124)
+        x     = (~x_0.3567*~x_1.3568*inv(~u.3566))
+        z     = 'g2'^(x.7122*inv(~e1.3564))
+        ~x.1  = ~x_0.3567
+        z.1   = true
+        ~x.2  = ~x_1.3568
+        z.2   = 'g2'^x.7122
+        z.3   = 'g2'^(~x_0.3567*inv(~u.3566))
+        z.4   = 'g'^(~x_1.3568*inv(~u.3566))
+
+    48. ~e1   = ~e1.3565
+        ~u    = ~u.3567
+        ~x_0  = ~x_0.3568
+        ~x_1  = ~x_1.3569
+        X_00  = X_00.3570
+        e2    = (x.7123*inv((~e1.3565*x.7124)))
+        n_0   = n_0.3572
+        rec_server_certificate_verify_ext_signed
+              = sign(<
+                      <n_0.3572, X_00.3570,
+                       add('g2'^~e1.3565, 'g2'^(x.7123*inv((~e1.3565*x.7124)))),
+                       'g'^~x_1.3569>,
+                      h3(<n_0.3572, X_00.3570,
+                          add('g2'^~e1.3565, 'g2'^(x.7123*inv((~e1.3565*x.7124)))),
+                          'g'^~x_1.3569>)
+                     >,
+                     x.7126)
+        srv_pk
+              = pk(x.7126)
+        x     = (~x_0.3568*~x_1.3569*inv(~u.3567))
+        z     = 'g2'^(x.7123*inv((~e1.3565*x.7124)))
+        ~x.1  = ~x_0.3568
+        z.1   = true
+        ~x.2  = ~x_1.3569
+        z.2   = 'g2'^(x.7123*inv(x.7124))
+        z.3   = 'g2'^(~x_0.3568*inv(~u.3567))
+        z.4   = 'g'^(~x_1.3569*inv(~u.3567))
+  */
+
+rule (modulo E) No_Interrupt_OTEE_Memory_Read:
+   [
+   OTEE_2( ~tee_id, $OTEE, 'g', 'g2', $D, ~u, n_0, ~x_0, X_00, n_1,
+           X_11, DHE, srv_pk
+   ),
+   !AgentInstance( ~aid, $A, $D, ~prop )
+   ]
+  --[
+  OTEEHonestPropertyRead( $OTEE, $D, $A, ~prop ),
+  OTEESession( $OTEE, ~u ), OTEESessionAggrNonce( $OTEE, ~u, n_1 ),
+  OTEEPosition( $OTEE, select(DHE) ),
+  OTEEMeasure( $OTEE, select(DHE), ~prop )
+  ]->
+   [
+   OTEE_3( ~tee_id, $OTEE, 'g', 'g2', $D, ~u, n_0, ~x_0, X_00, n_1,
+           X_11, DHE, srv_pk, select(DHE), ~prop, '0'
+   ),
+   Out( select(DHE) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) No_Interrupt_Prepared_Memory_Read:
+   [
+   OTEE_2( ~tee_id, $OTEE, 'g', 'g2', $D, ~u, n_0, ~x_0, X_00, n_1,
+           X_11, DHE, srv_pk
+   ),
+   In( ~adv_prop )
+   ]
+  --[
+  PreparedMemoryRead( $OTEE, $D ), RequireOSCompromise( $D ),
+  OTEESession( $OTEE, ~u ), OTEESessionAggrNonce( $OTEE, ~u, n_1 ),
+  OTEEMeasure( $OTEE, select(DHE), ~adv_prop )
+  ]->
+   [
+   OTEE_3( ~tee_id, $OTEE, 'g', 'g2', $D, ~u, n_0, ~x_0, X_00, n_1,
+           X_11, DHE, srv_pk, select(DHE), ~adv_prop, '0'
+   ),
+   Out( select(DHE) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Interrupt_OTEE_Memory_Read:
+   [
+   OTEE_2( ~tee_id, $OTEE, 'g', 'g2', $D, ~u, n_0, ~x_0, X_00, n_1,
+           X_11, DHE, srv_pk
+   )
+   ]
+  --[
+  RequireOSCompromise( $D ), InterruptOTEEMemoryRead( $OTEE, $D ),
+  OTEESession( $OTEE, ~u ), OTEESessionAggrNonce( $OTEE, ~u, n_1 ),
+  OTEEMeasure( $OTEE, select(DHE), 'null' )
+  ]->
+   [
+   OTEE_Interrupt( ~tee_id, $OTEE, 'g', 'g2', $D, ~u, n_0, ~x_0, X_00,
+                   n_1, X_11, DHE, srv_pk
+   ),
+   Out( select(DHE) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Continue_OTEE_Interrupt_With_Agent:
+   [
+   OTEE_Interrupt( ~tee_id, $OTEE, 'g', 'g2', $D, ~u, n_0, ~x_0, X_00,
+                   n_1, X_11, DHE, srv_pk
+   ),
+   !AgentInstance( ~aid, $A, $D2, ~prop )
+   ]
+  --[
+  ResumeOTEE( $OTEE, $D ), RequireOSCompromise( $D ),
+  RequireOSCompromise( $D2 ), OTEESession( $OTEE, ~u ),
+  OTEESessionAggrNonce( $OTEE, ~u, n_1 )
+  ]->
+   [
+   OTEE_3( ~tee_id, $OTEE, 'g', 'g2', $D, ~u, n_0, ~x_0, X_00, n_1,
+           X_11, DHE, srv_pk, select(DHE), ~prop, '1'
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) OTEE_Challenge_Response:
+   [
+   OTEE_3( ~tee_id, $OTEE, 'g', 'g2', $D, ~u, n_0, ~x_0, X_00, n_1,
+           X_11, DHE, srv_pk, ch_pos, ~ch_prop, int_indicator
+   ),
+   !OTEE_Ltk( $OTEE, ~OTEE_ltk ), Fr( ~t )
+   ]
+  --[
+  Neq( X_11, 'g' ), Neq( X_11, DH_neutral ),
+  Neq( calculate_z('g2', ~u, ~t,
+                   calculate_witness(int_indicator, ch_pos, ~ch_prop), n_1),
+       'g2'
+  ),
+  Neq( calculate_z('g2', ~u, ~t,
+                   calculate_witness(int_indicator, ch_pos, ~ch_prop), n_1),
+       DH_neutral
+  ),
+  Neq( calculate_z('g2', ~u, ~t,
+                   calculate_witness(int_indicator, ch_pos, ~ch_prop), n_1),
+       'g'
+  ),
+  Neq( calculate_z('g2', ~u, ~t,
+                   calculate_witness(int_indicator, ch_pos, ~ch_prop), n_1),
+       X_11
+  ),
+  Neq( calculate_z('g2', ~u, ~t,
+                   calculate_witness(int_indicator, ch_pos, ~ch_prop), n_1),
+       'g'^~x_0
+  ),
+  OTEEChallengeResponse( $OTEE, $D, ~u ), OTEESession( $OTEE, ~u ),
+  OTEEWitness( calculate_witness(int_indicator, ch_pos, ~ch_prop) ),
+  OTEEZ( calculate_z('g2', ~u, ~t,
+                     calculate_witness(int_indicator, ch_pos, ~ch_prop), n_1)
+  ),
+  OTEESecret( $OTEE, ~t, inv(~t), 'g2'^~t, 'g2'^inv(~t) ),
+  OTEEChallengeResponseDH( $OTEE, ~x_0 ),
+  OTEEChallengeResponseKey( $OTEE, DHE ),
+  OTEESessionAggrNonce( $OTEE, ~u, n_1 ),
+  OTEERevealSecretKey( $OTEE, ~x_0 )
+  ]->
+   [
+   Out( <'OTEE_challenge_response',
+         senc(calc_client_finished(n_0, X_00, n_1, X_11, srv_pk, DHE),
+              client_handshake_traffic_secret(DHE)),
+         senc(client_ODT_response_payload(calculate_y('g2', ~t),
+                                          calculate_z('g2', ~u, ~t,
+                                                      calculate_witness(int_indicator, ch_pos,
+                                                                        ~ch_prop),
+                                                      n_1),
+                                          sign(client_ODT_signature_payload(calculate_y('g2', ~t),
+                                                                            calculate_z('g2', ~u,
+                                                                                        ~t,
+                                                                                        calculate_witness(int_indicator,
+                                                                                                          ch_pos,
+                                                                                                          ~ch_prop),
+                                                                                        n_1),
+                                                                            $OTEE,
+                                                                            calc_client_finished(n_0,
+                                                                                                 X_00,
+                                                                                                 n_1,
+                                                                                                 X_11,
+                                                                                                 srv_pk,
+                                                                                                 DHE)),
+                                               ~OTEE_ltk),
+                                          $OTEE),
+              client_application_traffic_secret(DHE)),
+         ~x_0>
+   )
+   ]
+
+  /*
+  rule (modulo AC) OTEE_Challenge_Response:
+     [
+     OTEE_3( ~tee_id, $OTEE, 'g', 'g2', $D, ~u, n_0, ~x_0, X_00, n_1,
+             X_11, DHE, srv_pk, ch_pos, ~ch_prop, int_indicator
+     ),
+     !OTEE_Ltk( $OTEE, ~OTEE_ltk ), Fr( ~t )
+     ]
+    --[
+    Neq( X_11, 'g' ), Neq( X_11, DH_neutral ), Neq( z, 'g2' ),
+    Neq( z, DH_neutral ), Neq( z, 'g' ), Neq( z, X_11 ),
+    Neq( z, 'g'^~x_0 ), OTEEChallengeResponse( $OTEE, $D, ~u ),
+    OTEESession( $OTEE, ~u ),
+    OTEEWitness( h2(int_indicator, measure(ch_pos, ~ch_prop)) ),
+    OTEEZ( z ),
+    OTEESecret( $OTEE, ~t, inv(~t), 'g2'^~t, 'g2'^inv(~t) ),
+    OTEEChallengeResponseDH( $OTEE, ~x_0 ),
+    OTEEChallengeResponseKey( $OTEE, DHE ),
+    OTEESessionAggrNonce( $OTEE, ~u, n_1 ),
+    OTEERevealSecretKey( $OTEE, ~x_0 )
+    ]->
+     [
+     Out( <'OTEE_challenge_response',
+           senc(hmac(derive_secret(derive_secret(DHE, 'c_hs_traffic'),
+                                   'finished'),
+                     <<n_0, X_00, n_1, X_11, srv_pk>, h3(<n_0, X_00, n_1, X_11, srv_pk>)
+                     >),
+                derive_secret(DHE, 'c_hs_traffic')),
+           senc(<'g2'^~t, z,
+                 sign(<'g2'^~t, z, $OTEE,
+                       hmac(derive_secret(derive_secret(DHE, 'c_hs_traffic'), 'finished'),
+                            <<n_0, X_00, n_1, X_11, srv_pk>, h3(<n_0, X_00, n_1, X_11, srv_pk>)
+                            >)
+                      >,
+                      ~OTEE_ltk),
+                 $OTEE>,
+                derive_secret(derive_secret(DHE, 'derived'), 'c_ap_traffic')),
+           ~x_0>
+     )
+     ]
+    variants (modulo AC)
+    1. ~ch_prop
+             = ~ch_prop.34
+       ~u    = ~u.37
+       ch_pos
+             = ch_pos.42
+       int_indicator
+             = int_indicator.43
+       n_1   = add(DH_neutral,
+                   'g2'^(~u.37*h2(int_indicator.43, measure(ch_pos.42, ~ch_prop.34))))
+       z     = DH_neutral
+
+    2. ~ch_prop
+             = ~ch_prop.36
+       ~t    = ~t.37
+       ~u    = ~u.39
+       ch_pos
+             = ch_pos.44
+       int_indicator
+             = int_indicator.45
+       n_1   = n_1.47
+       z     = sub(n_1.47,
+                   'g2'^(~u.39*h2(int_indicator.45, measure(ch_pos.44, ~ch_prop.36))
+                        ))^~t.37
+
+    3. ~ch_prop
+             = ~ch_prop.44
+       ~t    = ~t.45
+       ~u    = ~u.47
+       ch_pos
+             = ch_pos.52
+       int_indicator
+             = int_indicator.53
+       n_1   = add(z.63^inv(~t.45),
+                   'g2'^(~u.47*h2(int_indicator.53, measure(ch_pos.52, ~ch_prop.44))))
+       z     = z.63
+
+    4. ~ch_prop
+             = ~ch_prop.945
+       ~t    = ~t.946
+       ~u    = ~u.948
+       ch_pos
+             = ch_pos.953
+       int_indicator
+             = int_indicator.954
+       n_1   = add(x.1885,
+                   'g2'^(~u.948*
+                         h2(int_indicator.954, measure(ch_pos.953, ~ch_prop.945))))
+       z     = x.1885^~t.946
+
+    5. ~ch_prop
+             = ~ch_prop.946
+       ~t    = ~t.947
+       ~u    = ~u.949
+       ch_pos
+             = ch_pos.954
+       int_indicator
+             = int_indicator.955
+       n_1   = add(x.1886^x.1887,
+                   'g2'^(~u.949*
+                         h2(int_indicator.955, measure(ch_pos.954, ~ch_prop.946))))
+       z     = x.1886^(~t.947*x.1887)
+
+    6. ~ch_prop
+             = ~ch_prop.946
+       ~t    = ~t.947
+       ~u    = ~u.949
+       ch_pos
+             = ch_pos.954
+       int_indicator
+             = int_indicator.955
+       n_1   = add(x.1886^inv((~t.947*x.1887)),
+                   'g2'^(~u.949*
+                         h2(int_indicator.955, measure(ch_pos.954, ~ch_prop.946))))
+       z     = x.1886^inv(x.1887)
+
+    7. ~ch_prop
+             = ~ch_prop.946
+       ~t    = ~t.947
+       ~u    = ~u.949
+       ch_pos
+             = ch_pos.954
+       int_indicator
+             = int_indicator.955
+       n_1   = add(x.1886^(x.1887*inv(~t.947)),
+                   'g2'^(~u.949*
+                         h2(int_indicator.955, measure(ch_pos.954, ~ch_prop.946))))
+       z     = x.1886^x.1887
+
+    8. ~ch_prop
+             = ~ch_prop.947
+       ~t    = ~t.948
+       ~u    = ~u.950
+       ch_pos
+             = ch_pos.955
+       int_indicator
+             = int_indicator.956
+       n_1   = add(x.1887^(x.1888*inv((~t.948*x.1889))),
+                   'g2'^(~u.950*
+                         h2(int_indicator.956, measure(ch_pos.955, ~ch_prop.947))))
+       z     = x.1887^(x.1888*inv(x.1889))
+  */
+
+rule (modulo E) Server_Finished[derivchecks]:
+   [
+   Aggressor_1( $AGGR, 'g', 'g2', ~prop, ~s, $A, ~ltk, n_0, X_00, n_1,
+                ~x_1, X_11, DHE
+   ),
+   In( <senc(client_finished, client_handshake_traffic_secret(DHE)),
+        senc(client_ODT_response_payload('g2'^Y, 'g2'^Z, sig, $otee_id),
+             client_application_traffic_secret(DHE)),
+        pk(~OTEE), NP_OTEE_signature>
+   ),
+   !NP_Pk( $NP, NP_pk )
+   ]
+  --[
+  Neq( 'g2'^Y, 'g2' ), Neq( 'g2'^Y, DH_neutral ), Neq( 'g2'^Y, n_1 ),
+  Neq( 'g2'^Y, 'g2'^Z ), Neq( 'g2'^Z, 'g2' ),
+  Neq( 'g2'^Z, DH_neutral ), Neq( 'g2'^Z, n_1 ),
+  Eq( verify(NP_OTEE_signature, <$otee_id, pk(~OTEE)>, NP_pk), true
+  ),
+  Eq( client_finished,
+      calc_client_finished(n_0, X_00, n_1, X_11, pk(~ltk), DHE)
+  ),
+  Eq( 'g2'^Z, 'g2'^Y^~s ),
+  Eq( verify(sig,
+             client_ODT_signature_payload('g2'^Y, 'g2'^Z, $otee_id,
+                                          client_finished),
+             pk(~OTEE)),
+      true
+  ),
+  AcceptVerificationWithAgent( $AGGR, $otee_id, $A, ~prop ),
+  AcceptVerification( $AGGR, $otee_id ),
+  AcceptVerificationDHE( $AGGR, DHE ),
+  AcceptVerificationPosition( $AGGR, select(DHE) )
+  ]->
+   [ Aggressor_Done( $AGGR ) ]
+
+  /*
+  rule (modulo AC) Server_Finished[derivchecks]:
+     [
+     Aggressor_1( $AGGR, 'g', 'g2', ~prop, ~s, $A, ~ltk, n_0, X_00, n_1,
+                  ~x_1, X_11, DHE
+     ),
+     In( <senc(client_finished, derive_secret(DHE, 'c_hs_traffic')),
+          senc(<z, z.1, sig, $otee_id>,
+               derive_secret(derive_secret(DHE, 'derived'), 'c_ap_traffic')),
+          pk(~OTEE), NP_OTEE_signature>
+     ),
+     !NP_Pk( $NP, NP_pk )
+     ]
+    --[
+    Neq( z, 'g2' ), Neq( z, DH_neutral ), Neq( z, n_1 ), Neq( z, z.1 ),
+    Neq( z.1, 'g2' ), Neq( z.1, DH_neutral ), Neq( z.1, n_1 ),
+    Eq( z.2, true ),
+    Eq( client_finished,
+        hmac(derive_secret(derive_secret(DHE, 'c_hs_traffic'), 'finished'),
+             <<n_0, X_00, n_1, X_11, pk(~ltk)>,
+              h3(<n_0, X_00, n_1, X_11, pk(~ltk)>)>)
+    ),
+    Eq( z.1, z.3 ), Eq( z.4, true ),
+    AcceptVerificationWithAgent( $AGGR, $otee_id, $A, ~prop ),
+    AcceptVerification( $AGGR, $otee_id ),
+    AcceptVerificationDHE( $AGGR, DHE ),
+    AcceptVerificationPosition( $AGGR, select(DHE) )
+    ]->
+     [ Aggressor_Done( $AGGR ) ]
+    variants (modulo AC)
+     1. $otee_id
+              = $otee_id.46
+        ~OTEE = ~OTEE.47
+        ~s    = ~s.50
+        NP_OTEE_signature
+              = NP_OTEE_signature.53
+        NP_pk = NP_pk.54
+        client_finished
+              = client_finished.59
+        sig   = sign(<'g2', 'g2', $otee_id.46, client_finished.59>,
+                     ~OTEE.47)
+        z     = 'g2'
+        z.1   = 'g2'
+        z.2   = verify(NP_OTEE_signature.53, <$otee_id.46, pk(~OTEE.47)>,
+                       NP_pk.54)
+        z.3   = 'g2'^~s.50
+        z.4   = true
+
+     2. $otee_id
+              = $otee_id.46
+        ~OTEE = ~OTEE.47
+        ~s    = ~s.50
+        NP_OTEE_signature
+              = NP_OTEE_signature.53
+        NP_pk = NP_pk.54
+        client_finished
+              = client_finished.59
+        sig   = sign(<'g2'^inv(~s.50), 'g2', $otee_id.46,
+                      client_finished.59>,
+                     ~OTEE.47)
+        z     = 'g2'^inv(~s.50)
+        z.1   = 'g2'
+        z.2   = verify(NP_OTEE_signature.53, <$otee_id.46, pk(~OTEE.47)>,
+                       NP_pk.54)
+        z.3   = 'g2'
+        z.4   = true
+
+     3. $otee_id
+              = $otee_id.49
+        ~OTEE = ~OTEE.50
+        ~s    = ~s.53
+        NP_OTEE_signature
+              = NP_OTEE_signature.56
+        NP_pk = NP_pk.57
+        client_finished
+              = client_finished.62
+        sig   = sig.65
+        z     = 'g2'
+        z.1   = 'g2'
+        z.2   = verify(NP_OTEE_signature.56, <$otee_id.49, pk(~OTEE.50)>,
+                       NP_pk.57)
+        z.3   = 'g2'^~s.53
+        z.4   = verify(sig.65,
+                       <'g2', 'g2', $otee_id.49, client_finished.62>, pk(~OTEE.50))
+
+     4. $otee_id
+              = $otee_id.49
+        ~OTEE = ~OTEE.50
+        ~s    = ~s.53
+        NP_OTEE_signature
+              = NP_OTEE_signature.56
+        NP_pk = NP_pk.57
+        client_finished
+              = client_finished.62
+        sig   = sig.65
+        z     = 'g2'^inv(~s.53)
+        z.1   = 'g2'
+        z.2   = verify(NP_OTEE_signature.56, <$otee_id.49, pk(~OTEE.50)>,
+                       NP_pk.57)
+        z.3   = 'g2'
+        z.4   = verify(sig.65,
+                       <'g2'^inv(~s.53), 'g2', $otee_id.49, client_finished.62>,
+                       pk(~OTEE.50))
+
+     5. $otee_id
+              = $otee_id.173
+        ~OTEE = ~OTEE.174
+        ~s    = ~s.177
+        NP_OTEE_signature
+              = NP_OTEE_signature.180
+        NP_pk = NP_pk.181
+        client_finished
+              = client_finished.186
+        sig   = sig.189
+        z     = 'g2'
+        z.1   = 'g2'^Z.341
+        z.2   = verify(NP_OTEE_signature.180,
+                       <$otee_id.173, pk(~OTEE.174)>, NP_pk.181)
+        z.3   = 'g2'^~s.177
+        z.4   = verify(sig.189,
+                       <'g2', 'g2'^Z.341, $otee_id.173, client_finished.186>,
+                       pk(~OTEE.174))
+
+     6. $otee_id
+              = $otee_id.173
+        ~OTEE = ~OTEE.174
+        ~s    = ~s.177
+        NP_OTEE_signature
+              = NP_OTEE_signature.180
+        NP_pk = NP_pk.181
+        client_finished
+              = client_finished.186
+        sig   = sig.189
+        z     = 'g2'^Y.341
+        z.1   = 'g2'
+        z.2   = verify(NP_OTEE_signature.180,
+                       <$otee_id.173, pk(~OTEE.174)>, NP_pk.181)
+        z.3   = 'g2'^(~s.177*Y.341)
+        z.4   = verify(sig.189,
+                       <'g2'^Y.341, 'g2', $otee_id.173, client_finished.186>,
+                       pk(~OTEE.174))
+
+     7. $otee_id
+              = $otee_id.173
+        ~OTEE = ~OTEE.174
+        ~s    = ~s.177
+        NP_OTEE_signature
+              = NP_OTEE_signature.180
+        NP_pk = NP_pk.181
+        client_finished
+              = client_finished.186
+        sig   = sig.189
+        z     = 'g2'^Y.341
+        z.1   = 'g2'^Z.341
+        z.2   = verify(NP_OTEE_signature.180,
+                       <$otee_id.173, pk(~OTEE.174)>, NP_pk.181)
+        z.3   = 'g2'^(~s.177*Y.341)
+        z.4   = verify(sig.189,
+                       <'g2'^Y.341, 'g2'^Z.341, $otee_id.173, client_finished.186>,
+                       pk(~OTEE.174))
+
+     8. $otee_id
+              = $otee_id.174
+        ~OTEE = ~OTEE.175
+        ~s    = ~s.178
+        NP_OTEE_signature
+              = NP_OTEE_signature.181
+        NP_pk = NP_pk.182
+        client_finished
+              = client_finished.187
+        sig   = sig.190
+        z     = 'g2'^inv(~s.178)
+        z.1   = 'g2'^Z.343
+        z.2   = verify(NP_OTEE_signature.181,
+                       <$otee_id.174, pk(~OTEE.175)>, NP_pk.182)
+        z.3   = 'g2'
+        z.4   = verify(sig.190,
+                       <'g2'^inv(~s.178), 'g2'^Z.343, $otee_id.174, client_finished.187>,
+                       pk(~OTEE.175))
+
+     9. $otee_id
+              = $otee_id.180
+        ~OTEE = ~OTEE.181
+        ~s    = ~s.184
+        NP_OTEE_signature
+              = NP_OTEE_signature.187
+        NP_pk = NP_pk.188
+        client_finished
+              = client_finished.193
+        sig   = sig.196
+        z     = 'g2'^inv((~s.184*x.355))
+        z.1   = 'g2'
+        z.2   = verify(NP_OTEE_signature.187,
+                       <$otee_id.180, pk(~OTEE.181)>, NP_pk.188)
+        z.3   = 'g2'^inv(x.355)
+        z.4   = verify(sig.196,
+                       <'g2'^inv((~s.184*x.355)), 'g2', $otee_id.180, client_finished.193
+                       >,
+                       pk(~OTEE.181))
+
+    10. $otee_id
+              = $otee_id.180
+        ~OTEE = ~OTEE.181
+        ~s    = ~s.184
+        NP_OTEE_signature
+              = NP_OTEE_signature.187
+        NP_pk = NP_pk.188
+        client_finished
+              = client_finished.193
+        sig   = sig.196
+        z     = 'g2'^(x.355*inv(~s.184))
+        z.1   = 'g2'
+        z.2   = verify(NP_OTEE_signature.187,
+                       <$otee_id.180, pk(~OTEE.181)>, NP_pk.188)
+        z.3   = 'g2'^x.355
+        z.4   = verify(sig.196,
+                       <'g2'^(x.355*inv(~s.184)), 'g2', $otee_id.180, client_finished.193
+                       >,
+                       pk(~OTEE.181))
+
+    11. $otee_id
+              = $otee_id.180
+        ~OTEE = ~OTEE.181
+        ~s    = ~s.184
+        NP_OTEE_signature
+              = sign(<$otee_id.180, pk(~OTEE.181)>, x.355)
+        NP_pk = pk(x.355)
+        client_finished
+              = client_finished.193
+        sig   = sig.196
+        z     = 'g2'
+        z.1   = 'g2'
+        z.2   = true
+        z.3   = 'g2'^~s.184
+        z.4   = verify(sig.196,
+                       <'g2', 'g2', $otee_id.180, client_finished.193>, pk(~OTEE.181))
+
+    12. $otee_id
+              = $otee_id.180
+        ~OTEE = ~OTEE.181
+        ~s    = ~s.184
+        NP_OTEE_signature
+              = sign(<$otee_id.180, pk(~OTEE.181)>, x.355)
+        NP_pk = pk(x.355)
+        client_finished
+              = client_finished.193
+        sig   = sig.196
+        z     = 'g2'^inv(~s.184)
+        z.1   = 'g2'
+        z.2   = true
+        z.3   = 'g2'
+        z.4   = verify(sig.196,
+                       <'g2'^inv(~s.184), 'g2', $otee_id.180, client_finished.193>,
+                       pk(~OTEE.181))
+
+    13. $otee_id
+              = $otee_id.180
+        ~OTEE = ~OTEE.181
+        ~s    = ~s.184
+        NP_OTEE_signature
+              = sign(<$otee_id.180, pk(~OTEE.181)>, x.355)
+        NP_pk = pk(x.355)
+        client_finished
+              = client_finished.193
+        sig   = sign(<'g2', 'g2', $otee_id.180, client_finished.193>,
+                     ~OTEE.181)
+        z     = 'g2'
+        z.1   = 'g2'
+        z.2   = true
+        z.3   = 'g2'^~s.184
+        z.4   = true
+
+    14. $otee_id
+              = $otee_id.180
+        ~OTEE = ~OTEE.181
+        ~s    = ~s.184
+        NP_OTEE_signature
+              = sign(<$otee_id.180, pk(~OTEE.181)>, x.355)
+        NP_pk = pk(x.355)
+        client_finished
+              = client_finished.193
+        sig   = sign(<'g2'^inv(~s.184), 'g2', $otee_id.180,
+                      client_finished.193>,
+                     ~OTEE.181)
+        z     = 'g2'^inv(~s.184)
+        z.1   = 'g2'
+        z.2   = true
+        z.3   = 'g2'
+        z.4   = true
+
+    15. $otee_id
+              = $otee_id.181
+        ~OTEE = ~OTEE.182
+        ~s    = ~s.185
+        NP_OTEE_signature
+              = NP_OTEE_signature.188
+        NP_pk = NP_pk.189
+        client_finished
+              = client_finished.194
+        sig   = sig.197
+        z     = 'g2'^inv((~s.185*x.356))
+        z.1   = 'g2'^Z.357
+        z.2   = verify(NP_OTEE_signature.188,
+                       <$otee_id.181, pk(~OTEE.182)>, NP_pk.189)
+        z.3   = 'g2'^inv(x.356)
+        z.4   = verify(sig.197,
+                       <'g2'^inv((~s.185*x.356)), 'g2'^Z.357, $otee_id.181,
+                        client_finished.194>,
+                       pk(~OTEE.182))
+
+    16. $otee_id
+              = $otee_id.181
+        ~OTEE = ~OTEE.182
+        ~s    = ~s.185
+        NP_OTEE_signature
+              = NP_OTEE_signature.188
+        NP_pk = NP_pk.189
+        client_finished
+              = client_finished.194
+        sig   = sig.197
+        z     = 'g2'^(x.356*inv(~s.185))
+        z.1   = 'g2'^Z.357
+        z.2   = verify(NP_OTEE_signature.188,
+                       <$otee_id.181, pk(~OTEE.182)>, NP_pk.189)
+        z.3   = 'g2'^x.356
+        z.4   = verify(sig.197,
+                       <'g2'^(x.356*inv(~s.185)), 'g2'^Z.357, $otee_id.181,
+                        client_finished.194>,
+                       pk(~OTEE.182))
+
+    17. $otee_id
+              = $otee_id.181
+        ~OTEE = ~OTEE.182
+        ~s    = ~s.185
+        NP_OTEE_signature
+              = NP_OTEE_signature.188
+        NP_pk = NP_pk.189
+        client_finished
+              = client_finished.194
+        sig   = sig.197
+        z     = 'g2'^(x.356*inv((~s.185*x.357)))
+        z.1   = 'g2'
+        z.2   = verify(NP_OTEE_signature.188,
+                       <$otee_id.181, pk(~OTEE.182)>, NP_pk.189)
+        z.3   = 'g2'^(x.356*inv(x.357))
+        z.4   = verify(sig.197,
+                       <'g2'^(x.356*inv((~s.185*x.357))), 'g2', $otee_id.181,
+                        client_finished.194>,
+                       pk(~OTEE.182))
+
+    18. $otee_id
+              = $otee_id.181
+        ~OTEE = ~OTEE.182
+        ~s    = ~s.185
+        NP_OTEE_signature
+              = sign(<$otee_id.181, pk(~OTEE.182)>, x.356)
+        NP_pk = pk(x.356)
+        client_finished
+              = client_finished.194
+        sig   = sig.197
+        z     = 'g2'
+        z.1   = 'g2'^Z.357
+        z.2   = true
+        z.3   = 'g2'^~s.185
+        z.4   = verify(sig.197,
+                       <'g2', 'g2'^Z.357, $otee_id.181, client_finished.194>,
+                       pk(~OTEE.182))
+
+    19. $otee_id
+              = $otee_id.181
+        ~OTEE = ~OTEE.182
+        ~s    = ~s.185
+        NP_OTEE_signature
+              = sign(<$otee_id.181, pk(~OTEE.182)>, x.356)
+        NP_pk = pk(x.356)
+        client_finished
+              = client_finished.194
+        sig   = sig.197
+        z     = 'g2'^Y.357
+        z.1   = 'g2'
+        z.2   = true
+        z.3   = 'g2'^(~s.185*Y.357)
+        z.4   = verify(sig.197,
+                       <'g2'^Y.357, 'g2', $otee_id.181, client_finished.194>,
+                       pk(~OTEE.182))
+
+    20. $otee_id
+              = $otee_id.181
+        ~OTEE = ~OTEE.182
+        ~s    = ~s.185
+        NP_OTEE_signature
+              = sign(<$otee_id.181, pk(~OTEE.182)>, x.356)
+        NP_pk = pk(x.356)
+        client_finished
+              = client_finished.194
+        sig   = sig.197
+        z     = 'g2'^Y.357
+        z.1   = 'g2'^Z.357
+        z.2   = true
+        z.3   = 'g2'^(~s.185*Y.357)
+        z.4   = verify(sig.197,
+                       <'g2'^Y.357, 'g2'^Z.357, $otee_id.181, client_finished.194>,
+                       pk(~OTEE.182))
+
+    21. $otee_id
+              = $otee_id.181
+        ~OTEE = ~OTEE.182
+        ~s    = ~s.185
+        NP_OTEE_signature
+              = sign(<$otee_id.181, pk(~OTEE.182)>, x.356)
+        NP_pk = pk(x.356)
+        client_finished
+              = client_finished.194
+        sig   = sig.197
+        z     = 'g2'^inv(~s.185)
+        z.1   = 'g2'^Z.357
+        z.2   = true
+        z.3   = 'g2'
+        z.4   = verify(sig.197,
+                       <'g2'^inv(~s.185), 'g2'^Z.357, $otee_id.181, client_finished.194>,
+                       pk(~OTEE.182))
+
+    22. $otee_id
+              = $otee_id.182
+        ~OTEE = ~OTEE.183
+        ~s    = ~s.186
+        NP_OTEE_signature
+              = NP_OTEE_signature.189
+        NP_pk = NP_pk.190
+        client_finished
+              = client_finished.195
+        sig   = sig.198
+        z     = 'g2'^(x.357*inv((~s.186*x.358)))
+        z.1   = 'g2'^Z.359
+        z.2   = verify(NP_OTEE_signature.189,
+                       <$otee_id.182, pk(~OTEE.183)>, NP_pk.190)
+        z.3   = 'g2'^(x.357*inv(x.358))
+        z.4   = verify(sig.198,
+                       <'g2'^(x.357*inv((~s.186*x.358))), 'g2'^Z.359, $otee_id.182,
+                        client_finished.195>,
+                       pk(~OTEE.183))
+
+    23. $otee_id
+              = $otee_id.183
+        ~OTEE = ~OTEE.184
+        ~s    = ~s.187
+        NP_OTEE_signature
+              = sign(<$otee_id.183, pk(~OTEE.184)>, x.358)
+        NP_pk = pk(x.358)
+        client_finished
+              = client_finished.196
+        sig   = sig.199
+        z     = 'g2'^inv((~s.187*x.361))
+        z.1   = 'g2'
+        z.2   = true
+        z.3   = 'g2'^inv(x.361)
+        z.4   = verify(sig.199,
+                       <'g2'^inv((~s.187*x.361)), 'g2', $otee_id.183, client_finished.196
+                       >,
+                       pk(~OTEE.184))
+
+    24. $otee_id
+              = $otee_id.183
+        ~OTEE = ~OTEE.184
+        ~s    = ~s.187
+        NP_OTEE_signature
+              = sign(<$otee_id.183, pk(~OTEE.184)>, x.358)
+        NP_pk = pk(x.358)
+        client_finished
+              = client_finished.196
+        sig   = sig.199
+        z     = 'g2'^(x.361*inv(~s.187))
+        z.1   = 'g2'
+        z.2   = true
+        z.3   = 'g2'^x.361
+        z.4   = verify(sig.199,
+                       <'g2'^(x.361*inv(~s.187)), 'g2', $otee_id.183, client_finished.196
+                       >,
+                       pk(~OTEE.184))
+
+    25. $otee_id
+              = $otee_id.183
+        ~OTEE = ~OTEE.184
+        ~s    = ~s.187
+        NP_OTEE_signature
+              = sign(<$otee_id.183, pk(~OTEE.184)>, x.358)
+        NP_pk = pk(x.358)
+        client_finished
+              = client_finished.196
+        sig   = sign(<'g2', 'g2'^x.361, $otee_id.183, client_finished.196>,
+                     ~OTEE.184)
+        z     = 'g2'
+        z.1   = 'g2'^x.361
+        z.2   = true
+        z.3   = 'g2'^~s.187
+        z.4   = true
+
+    26. $otee_id
+              = $otee_id.183
+        ~OTEE = ~OTEE.184
+        ~s    = ~s.187
+        NP_OTEE_signature
+              = sign(<$otee_id.183, pk(~OTEE.184)>, x.358)
+        NP_pk = pk(x.358)
+        client_finished
+              = client_finished.196
+        sig   = sign(<'g2'^x.361, 'g2', $otee_id.183, client_finished.196>,
+                     ~OTEE.184)
+        z     = 'g2'^x.361
+        z.1   = 'g2'
+        z.2   = true
+        z.3   = 'g2'^(~s.187*x.361)
+        z.4   = true
+
+    27. $otee_id
+              = $otee_id.183
+        ~OTEE = ~OTEE.184
+        ~s    = ~s.187
+        NP_OTEE_signature
+              = sign(<$otee_id.183, pk(~OTEE.184)>, x.358)
+        NP_pk = pk(x.358)
+        client_finished
+              = client_finished.196
+        sig   = sign(<'g2'^inv(~s.187), 'g2'^x.361, $otee_id.183,
+                      client_finished.196>,
+                     ~OTEE.184)
+        z     = 'g2'^inv(~s.187)
+        z.1   = 'g2'^x.361
+        z.2   = true
+        z.3   = 'g2'
+        z.4   = true
+
+    28. $otee_id
+              = $otee_id.183
+        ~OTEE = ~OTEE.184
+        ~s    = ~s.187
+        NP_OTEE_signature
+              = sign(<$otee_id.183, pk(~OTEE.184)>, x.358)
+        NP_pk = pk(x.358)
+        client_finished
+              = client_finished.196
+        sig   = sign(<'g2'^inv((~s.187*x.361)), 'g2', $otee_id.183,
+                      client_finished.196>,
+                     ~OTEE.184)
+        z     = 'g2'^inv((~s.187*x.361))
+        z.1   = 'g2'
+        z.2   = true
+        z.3   = 'g2'^inv(x.361)
+        z.4   = true
+
+    29. $otee_id
+              = $otee_id.183
+        ~OTEE = ~OTEE.184
+        ~s    = ~s.187
+        NP_OTEE_signature
+              = sign(<$otee_id.183, pk(~OTEE.184)>, x.358)
+        NP_pk = pk(x.358)
+        client_finished
+              = client_finished.196
+        sig   = sign(<'g2'^(x.361*inv(~s.187)), 'g2', $otee_id.183,
+                      client_finished.196>,
+                     ~OTEE.184)
+        z     = 'g2'^(x.361*inv(~s.187))
+        z.1   = 'g2'
+        z.2   = true
+        z.3   = 'g2'^x.361
+        z.4   = true
+
+    30. $otee_id
+              = $otee_id.184
+        ~OTEE = ~OTEE.185
+        ~s    = ~s.188
+        NP_OTEE_signature
+              = NP_OTEE_signature.191
+        NP_pk = NP_pk.192
+        client_finished
+              = client_finished.197
+        sig   = sign(<'g2', 'g2'^x.363, $otee_id.184, client_finished.197>,
+                     ~OTEE.185)
+        z     = 'g2'
+        z.1   = 'g2'^x.363
+        z.2   = verify(NP_OTEE_signature.191,
+                       <$otee_id.184, pk(~OTEE.185)>, NP_pk.192)
+        z.3   = 'g2'^~s.188
+        z.4   = true
+
+    31. $otee_id
+              = $otee_id.184
+        ~OTEE = ~OTEE.185
+        ~s    = ~s.188
+        NP_OTEE_signature
+              = NP_OTEE_signature.191
+        NP_pk = NP_pk.192
+        client_finished
+              = client_finished.197
+        sig   = sign(<'g2'^x.363, 'g2', $otee_id.184, client_finished.197>,
+                     ~OTEE.185)
+        z     = 'g2'^x.363
+        z.1   = 'g2'
+        z.2   = verify(NP_OTEE_signature.191,
+                       <$otee_id.184, pk(~OTEE.185)>, NP_pk.192)
+        z.3   = 'g2'^(~s.188*x.363)
+        z.4   = true
+
+    32. $otee_id
+              = $otee_id.184
+        ~OTEE = ~OTEE.185
+        ~s    = ~s.188
+        NP_OTEE_signature
+              = NP_OTEE_signature.191
+        NP_pk = NP_pk.192
+        client_finished
+              = client_finished.197
+        sig   = sign(<'g2'^inv(~s.188), 'g2'^x.363, $otee_id.184,
+                      client_finished.197>,
+                     ~OTEE.185)
+        z     = 'g2'^inv(~s.188)
+        z.1   = 'g2'^x.363
+        z.2   = verify(NP_OTEE_signature.191,
+                       <$otee_id.184, pk(~OTEE.185)>, NP_pk.192)
+        z.3   = 'g2'
+        z.4   = true
+
+    33. $otee_id
+              = $otee_id.184
+        ~OTEE = ~OTEE.185
+        ~s    = ~s.188
+        NP_OTEE_signature
+              = NP_OTEE_signature.191
+        NP_pk = NP_pk.192
+        client_finished
+              = client_finished.197
+        sig   = sign(<'g2'^inv((~s.188*x.363)), 'g2', $otee_id.184,
+                      client_finished.197>,
+                     ~OTEE.185)
+        z     = 'g2'^inv((~s.188*x.363))
+        z.1   = 'g2'
+        z.2   = verify(NP_OTEE_signature.191,
+                       <$otee_id.184, pk(~OTEE.185)>, NP_pk.192)
+        z.3   = 'g2'^inv(x.363)
+        z.4   = true
+
+    34. $otee_id
+              = $otee_id.184
+        ~OTEE = ~OTEE.185
+        ~s    = ~s.188
+        NP_OTEE_signature
+              = NP_OTEE_signature.191
+        NP_pk = NP_pk.192
+        client_finished
+              = client_finished.197
+        sig   = sign(<'g2'^(x.363*inv(~s.188)), 'g2', $otee_id.184,
+                      client_finished.197>,
+                     ~OTEE.185)
+        z     = 'g2'^(x.363*inv(~s.188))
+        z.1   = 'g2'
+        z.2   = verify(NP_OTEE_signature.191,
+                       <$otee_id.184, pk(~OTEE.185)>, NP_pk.192)
+        z.3   = 'g2'^x.363
+        z.4   = true
+
+    35. $otee_id
+              = $otee_id.184
+        ~OTEE = ~OTEE.185
+        ~s    = ~s.188
+        NP_OTEE_signature
+              = sign(<$otee_id.184, pk(~OTEE.185)>, x.359)
+        NP_pk = pk(x.359)
+        client_finished
+              = client_finished.197
+        sig   = sig.200
+        z     = 'g2'^inv((~s.188*x.362))
+        z.1   = 'g2'^Z.363
+        z.2   = true
+        z.3   = 'g2'^inv(x.362)
+        z.4   = verify(sig.200,
+                       <'g2'^inv((~s.188*x.362)), 'g2'^Z.363, $otee_id.184,
+                        client_finished.197>,
+                       pk(~OTEE.185))
+
+    36. $otee_id
+              = $otee_id.184
+        ~OTEE = ~OTEE.185
+        ~s    = ~s.188
+        NP_OTEE_signature
+              = sign(<$otee_id.184, pk(~OTEE.185)>, x.359)
+        NP_pk = pk(x.359)
+        client_finished
+              = client_finished.197
+        sig   = sig.200
+        z     = 'g2'^(x.362*inv(~s.188))
+        z.1   = 'g2'^Z.363
+        z.2   = true
+        z.3   = 'g2'^x.362
+        z.4   = verify(sig.200,
+                       <'g2'^(x.362*inv(~s.188)), 'g2'^Z.363, $otee_id.184,
+                        client_finished.197>,
+                       pk(~OTEE.185))
+
+    37. $otee_id
+              = $otee_id.184
+        ~OTEE = ~OTEE.185
+        ~s    = ~s.188
+        NP_OTEE_signature
+              = sign(<$otee_id.184, pk(~OTEE.185)>, x.359)
+        NP_pk = pk(x.359)
+        client_finished
+              = client_finished.197
+        sig   = sig.200
+        z     = 'g2'^(x.362*inv((~s.188*x.363)))
+        z.1   = 'g2'
+        z.2   = true
+        z.3   = 'g2'^(x.362*inv(x.363))
+        z.4   = verify(sig.200,
+                       <'g2'^(x.362*inv((~s.188*x.363))), 'g2', $otee_id.184,
+                        client_finished.197>,
+                       pk(~OTEE.185))
+
+    38. $otee_id
+              = $otee_id.184
+        ~OTEE = ~OTEE.185
+        ~s    = ~s.188
+        NP_OTEE_signature
+              = sign(<$otee_id.184, pk(~OTEE.185)>, x.359)
+        NP_pk = pk(x.359)
+        client_finished
+              = client_finished.197
+        sig   = sign(<'g2'^x.362, 'g2'^x.363, $otee_id.184,
+                      client_finished.197>,
+                     ~OTEE.185)
+        z     = 'g2'^x.362
+        z.1   = 'g2'^x.363
+        z.2   = true
+        z.3   = 'g2'^(~s.188*x.362)
+        z.4   = true
+
+    39. $otee_id
+              = $otee_id.184
+        ~OTEE = ~OTEE.185
+        ~s    = ~s.188
+        NP_OTEE_signature
+              = sign(<$otee_id.184, pk(~OTEE.185)>, x.359)
+        NP_pk = pk(x.359)
+        client_finished
+              = client_finished.197
+        sig   = sign(<'g2'^inv((~s.188*x.362)), 'g2'^x.363, $otee_id.184,
+                      client_finished.197>,
+                     ~OTEE.185)
+        z     = 'g2'^inv((~s.188*x.362))
+        z.1   = 'g2'^x.363
+        z.2   = true
+        z.3   = 'g2'^inv(x.362)
+        z.4   = true
+
+    40. $otee_id
+              = $otee_id.184
+        ~OTEE = ~OTEE.185
+        ~s    = ~s.188
+        NP_OTEE_signature
+              = sign(<$otee_id.184, pk(~OTEE.185)>, x.359)
+        NP_pk = pk(x.359)
+        client_finished
+              = client_finished.197
+        sig   = sign(<'g2'^(x.362*inv(~s.188)), 'g2'^x.363, $otee_id.184,
+                      client_finished.197>,
+                     ~OTEE.185)
+        z     = 'g2'^(x.362*inv(~s.188))
+        z.1   = 'g2'^x.363
+        z.2   = true
+        z.3   = 'g2'^x.362
+        z.4   = true
+
+    41. $otee_id
+              = $otee_id.184
+        ~OTEE = ~OTEE.185
+        ~s    = ~s.188
+        NP_OTEE_signature
+              = sign(<$otee_id.184, pk(~OTEE.185)>, x.359)
+        NP_pk = pk(x.359)
+        client_finished
+              = client_finished.197
+        sig   = sign(<'g2'^(x.362*inv((~s.188*x.363))), 'g2',
+                      $otee_id.184, client_finished.197>,
+                     ~OTEE.185)
+        z     = 'g2'^(x.362*inv((~s.188*x.363)))
+        z.1   = 'g2'
+        z.2   = true
+        z.3   = 'g2'^(x.362*inv(x.363))
+        z.4   = true
+
+    42. $otee_id
+              = $otee_id.185
+        ~OTEE = ~OTEE.186
+        ~s    = ~s.189
+        NP_OTEE_signature
+              = NP_OTEE_signature.192
+        NP_pk = NP_pk.193
+        client_finished
+              = client_finished.198
+        sig   = sign(<'g2'^x.364, 'g2'^x.365, $otee_id.185,
+                      client_finished.198>,
+                     ~OTEE.186)
+        z     = 'g2'^x.364
+        z.1   = 'g2'^x.365
+        z.2   = verify(NP_OTEE_signature.192,
+                       <$otee_id.185, pk(~OTEE.186)>, NP_pk.193)
+        z.3   = 'g2'^(~s.189*x.364)
+        z.4   = true
+
+    43. $otee_id
+              = $otee_id.185
+        ~OTEE = ~OTEE.186
+        ~s    = ~s.189
+        NP_OTEE_signature
+              = NP_OTEE_signature.192
+        NP_pk = NP_pk.193
+        client_finished
+              = client_finished.198
+        sig   = sign(<'g2'^inv((~s.189*x.364)), 'g2'^x.365, $otee_id.185,
+                      client_finished.198>,
+                     ~OTEE.186)
+        z     = 'g2'^inv((~s.189*x.364))
+        z.1   = 'g2'^x.365
+        z.2   = verify(NP_OTEE_signature.192,
+                       <$otee_id.185, pk(~OTEE.186)>, NP_pk.193)
+        z.3   = 'g2'^inv(x.364)
+        z.4   = true
+
+    44. $otee_id
+              = $otee_id.185
+        ~OTEE = ~OTEE.186
+        ~s    = ~s.189
+        NP_OTEE_signature
+              = NP_OTEE_signature.192
+        NP_pk = NP_pk.193
+        client_finished
+              = client_finished.198
+        sig   = sign(<'g2'^(x.364*inv(~s.189)), 'g2'^x.365, $otee_id.185,
+                      client_finished.198>,
+                     ~OTEE.186)
+        z     = 'g2'^(x.364*inv(~s.189))
+        z.1   = 'g2'^x.365
+        z.2   = verify(NP_OTEE_signature.192,
+                       <$otee_id.185, pk(~OTEE.186)>, NP_pk.193)
+        z.3   = 'g2'^x.364
+        z.4   = true
+
+    45. $otee_id
+              = $otee_id.185
+        ~OTEE = ~OTEE.186
+        ~s    = ~s.189
+        NP_OTEE_signature
+              = NP_OTEE_signature.192
+        NP_pk = NP_pk.193
+        client_finished
+              = client_finished.198
+        sig   = sign(<'g2'^(x.364*inv((~s.189*x.365))), 'g2',
+                      $otee_id.185, client_finished.198>,
+                     ~OTEE.186)
+        z     = 'g2'^(x.364*inv((~s.189*x.365)))
+        z.1   = 'g2'
+        z.2   = verify(NP_OTEE_signature.192,
+                       <$otee_id.185, pk(~OTEE.186)>, NP_pk.193)
+        z.3   = 'g2'^(x.364*inv(x.365))
+        z.4   = true
+
+    46. $otee_id
+              = $otee_id.185
+        ~OTEE = ~OTEE.186
+        ~s    = ~s.189
+        NP_OTEE_signature
+              = sign(<$otee_id.185, pk(~OTEE.186)>, x.360)
+        NP_pk = pk(x.360)
+        client_finished
+              = client_finished.198
+        sig   = sig.201
+        z     = 'g2'^(x.363*inv((~s.189*x.364)))
+        z.1   = 'g2'^Z.365
+        z.2   = true
+        z.3   = 'g2'^(x.363*inv(x.364))
+        z.4   = verify(sig.201,
+                       <'g2'^(x.363*inv((~s.189*x.364))), 'g2'^Z.365, $otee_id.185,
+                        client_finished.198>,
+                       pk(~OTEE.186))
+
+    47. $otee_id
+              = $otee_id.185
+        ~OTEE = ~OTEE.186
+        ~s    = ~s.189
+        NP_OTEE_signature
+              = sign(<$otee_id.185, pk(~OTEE.186)>, x.360)
+        NP_pk = pk(x.360)
+        client_finished
+              = client_finished.198
+        sig   = sign(<'g2'^(x.363*inv((~s.189*x.364))), 'g2'^x.365,
+                      $otee_id.185, client_finished.198>,
+                     ~OTEE.186)
+        z     = 'g2'^(x.363*inv((~s.189*x.364)))
+        z.1   = 'g2'^x.365
+        z.2   = true
+        z.3   = 'g2'^(x.363*inv(x.364))
+        z.4   = true
+
+    48. $otee_id
+              = $otee_id.186
+        ~OTEE = ~OTEE.187
+        ~s    = ~s.190
+        NP_OTEE_signature
+              = NP_OTEE_signature.193
+        NP_pk = NP_pk.194
+        client_finished
+              = client_finished.199
+        sig   = sign(<'g2'^(x.365*inv((~s.190*x.366))), 'g2'^x.367,
+                      $otee_id.186, client_finished.199>,
+                     ~OTEE.187)
+        z     = 'g2'^(x.365*inv((~s.190*x.366)))
+        z.1   = 'g2'^x.367
+        z.2   = verify(NP_OTEE_signature.193,
+                       <$otee_id.186, pk(~OTEE.187)>, NP_pk.194)
+        z.3   = 'g2'^(x.365*inv(x.366))
+        z.4   = true
+  */
+
+restriction Equality:
+  "∀ x y #i. (Eq( x, y ) @ #i) ⇒ (x = y)"
+  // safety formula
+
+restriction Inequality:
+  "∀ x #i. (Neq( x, x ) @ #i) ⇒ (⊥)"
+  // safety formula
+
+restriction Unique:
+  "∀ x #i #j. ((Unique( x ) @ #i) ∧ (Unique( x ) @ #j)) ⇒ (#i = #j)"
+  // safety formula
+
+restriction OnlyOneNP:
+  "∀ x y #i #j.
+    ((InitializeNP( x ) @ #i) ∧ (InitializeNP( y ) @ #j)) ⇒ (#i = #j)"
+  // safety formula
+
+restriction OnlyOneAggressor:
+  "∀ AGGR AGGR2 #i #j.
+    ((AggressorInitialized( AGGR ) @ #i) ∧
+     (AggressorInitialized( AGGR2 ) @ #j)) ⇒
+    (#i = #j)"
+  // safety formula
+
+restriction AdversaryDoesNotExtractPropertiesFromOwnAgents:
+  "∀ A prop #i #j.
+    ((AdversaryExtractAgentProperties( A, prop ) @ #i) ∧
+     (AdversaryCreateAgent( A, prop ) @ #j)) ⇒
+    (⊥)"
+  // safety formula
+
+restriction OTEESessionCannotInterleaveWithSameNonce:
+  "∀ OTEE u n1 #i #j.
+    ((OTEESessionAggrNonce( OTEE, u, n1 ) @ #i) ∧
+     (OTEESessionAggrNonce( OTEE, u, n1 ) @ #j)) ⇒
+    (∀ u_2 #k.
+      ((((OTEESessionAggrNonce( OTEE, u_2, n1 ) @ #k) ∧ (#i < #k)) ∧
+        (#k < #j)) ∧
+       (¬(u = u_2))) ⇒
+      (⊥))"
+  // safety formula
+
+restriction OTEESessionHasToFinishBeforeStartingNext:
+  "∀ OTEE u u_2 n_1 #i #j.
+    ((((OTEESessionAggrNonce( OTEE, u, n_1 ) @ #i) ∧
+       (OTEESessionAggrNonce( OTEE, u_2, n_1 ) @ #j)) ∧
+      (#i < #j)) ∧
+     (¬(u = u_2))) ⇒
+    (∃ C #k.
+      ((OTEEChallengeResponse( OTEE, C, u ) @ #k) ∧ (#i < #k)) ∧
+      (#k < #j))"
+
+lemma auto_adversaryCannotCompromiseNPLTK [reuse]:
+  all-traces
+  "∀ NP ltk #i #j.
+    ((InitializeNP_LTK( NP, ltk ) @ #i) ∧ (!KU( ltk ) @ #j)) ⇒ (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ NP ltk #i #j.
+  (InitializeNP_LTK( NP, ltk ) @ #i) ∧ (!KU( ltk ) @ #j)"
+*/
+by sorry
+
+lemma auto_adversaryCannotKnowAggressorLtk [reuse]:
+  all-traces
+  "∀ AGGR ltk pk_ltk #i #j.
+    ((AggrServerHelloPK( AGGR, ltk, pk_ltk ) @ #i) ∧
+     (!KU( ltk ) @ #j)) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ AGGR ltk pk_ltk #i #j.
+  (AggrServerHelloPK( AGGR, ltk, pk_ltk ) @ #i) ∧ (!KU( ltk ) @ #j)"
+*/
+by sorry
+
+lemma auto_adversaryCannotRecoverAggressorDHShare [reuse]:
+  all-traces
+  "∀ AGGR x_0 x_1 X_11 #i #j.
+    ((AggrDH( AGGR, x_0, x_1, X_11 ) @ #i) ∧ (!KU( x_1 ) @ #j)) ⇒ (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ AGGR x_0 x_1 X_11 #i #j.
+  (AggrDH( AGGR, x_0, x_1, X_11 ) @ #i) ∧ (!KU( x_1 ) @ #j)"
+*/
+by sorry
+
+lemma auto_adversaryCannotFindPropertiesFromAggressor [reuse]:
+  all-traces
+  "∀ OTEE ch_pos ch_prop A #i #j #k.
+    (((OTEEMeasure( OTEE, ch_pos, ch_prop ) @ #i) ∧
+      (OUT_Aggressor_0( ch_prop ) @ #j)) ∧
+     (AdversaryCreateAgent( A, ch_prop ) @ #k)) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ OTEE ch_pos ch_prop A #i #j #k.
+  (OTEEMeasure( OTEE, ch_pos, ch_prop ) @ #i) ∧
+  (OUT_Aggressor_0( ch_prop ) @ #j) ∧
+  (AdversaryCreateAgent( A, ch_prop ) @ #k)"
+*/
+by sorry
+
+lemma auto_aggressorDHKeyIsUnique [reuse]:
+  all-traces
+  "∀ AGGR AGGR2 DHE #i #j.
+    (((AggrDHKey( AGGR, DHE ) @ #i) ∧ (AggrDHKey( AGGR2, DHE ) @ #j)) ∧
+     (¬(AGGR = AGGR2))) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ AGGR AGGR2 DHE #i #j.
+  (AggrDHKey( AGGR, DHE ) @ #i) ∧ (AggrDHKey( AGGR2, DHE ) @ #j)
+ ∧
+  ¬(AGGR = AGGR2)"
+*/
+by sorry
+
+lemma auto_adversaryCannotLearnOTEELtk [reuse]:
+  all-traces
+  "∀ NP OTEE OTEE_ltk #i #j.
+    ((OTEERegisterOTEE( NP, OTEE, OTEE_ltk ) @ #i) ∧
+     (!KU( OTEE_ltk ) @ #j)) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ NP OTEE OTEE_ltk #i #j.
+  (OTEERegisterOTEE( NP, OTEE, OTEE_ltk ) @ #i) ∧
+  (!KU( OTEE_ltk ) @ #j)"
+*/
+by sorry
+
+lemma auto_OTEEOrder [reuse]:
+  all-traces
+  "∀ OTEE x_0 u pk_ltk n_1 #i #j.
+    (((((OTEEChallengeResponseDH( OTEE, x_0 ) @ #i) ∧
+        (OTEESession( OTEE, u ) @ #i)) ∧
+       (OTEEReceiveServerHello( OTEE, pk_ltk, n_1 ) @ #j)) ∧
+      (OTEESession( OTEE, u ) @ #j)) ∧
+     (#i < #j)) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ OTEE x_0 u pk_ltk n_1 #i #j.
+  (OTEEChallengeResponseDH( OTEE, x_0 ) @ #i) ∧
+  (OTEESession( OTEE, u ) @ #i) ∧
+  (OTEEReceiveServerHello( OTEE, pk_ltk, n_1 ) @ #j) ∧
+  (OTEESession( OTEE, u ) @ #j)
+ ∧
+  #i < #j"
+*/
+by sorry
+
+lemma auto_adversaryCannotKnowEnclaveShareBeforeReveal [reuse]:
+  all-traces
+  "∀ OTEE key #i #j.
+    (((OTEERevealSecretKey( OTEE, key ) @ #i) ∧ (!KU( key ) @ #j)) ∧
+     (#j < #i)) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ OTEE key #i #j.
+  (OTEERevealSecretKey( OTEE, key ) @ #i) ∧ (!KU( key ) @ #j)
+ ∧
+  #j < #i"
+*/
+by sorry
+
+lemma auto_adversaryKnowsOTEEDHSecretAfterReveal [reuse]:
+  all-traces
+  "∀ OTEE D x_0 x_0_inv X_00 u #i #j.
+    (((OTEEHelloDH( OTEE, D, x_0, x_0_inv, X_00 ) @ #i) ∧
+      (OTEESession( OTEE, u ) @ #i)) ∧
+     (!KU( x_0 ) @ #j)) ⇒
+    (∃ #k.
+      ((OTEEChallengeResponseDH( OTEE, x_0 ) @ #k) ∧
+       (OTEESession( OTEE, u ) @ #k)) ∧
+      (#k < #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ OTEE D x_0 x_0_inv X_00 u #i #j.
+  (OTEEHelloDH( OTEE, D, x_0, x_0_inv, X_00 ) @ #i) ∧
+  (OTEESession( OTEE, u ) @ #i) ∧
+  (!KU( x_0 ) @ #j)
+ ∧
+  ∀ #k.
+   (OTEEChallengeResponseDH( OTEE, x_0 ) @ #k) ∧
+   (OTEESession( OTEE, u ) @ #k)
+  ⇒
+   ¬(#k < #j)"
+*/
+by sorry
+
+lemma auto_adversaryCannotLearnDeviceDHShareBeforeEnd [reuse]:
+  all-traces
+  "∀ OTEE D x_0 x_0_inv X_00 #i #j.
+    ((OTEEHelloDH( OTEE, D, x_0, x_0_inv, X_00 ) @ #i) ∧
+     (!KU( x_0 ) @ #j)) ⇒
+    (∃ x_0_inv.1 X_11 #k.
+      (OTEEDH( OTEE, x_0, x_0_inv.1, X_11 ) @ #k) ∧ (#k < #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ OTEE D x_0 x_0_inv X_00 #i #j.
+  (OTEEHelloDH( OTEE, D, x_0, x_0_inv, X_00 ) @ #i) ∧
+  (!KU( x_0 ) @ #j)
+ ∧
+  ∀ x_0_inv.1 X_11 #k.
+   (OTEEDH( OTEE, x_0, x_0_inv.1, X_11 ) @ #k) ⇒ ¬(#k < #j)"
+*/
+by sorry
+
+lemma auto_ifOTEEConnectsToServerThenShareMustBeOutputByTheServer [reuse]:
+  all-traces
+  "∀ OTEE AGGR_pk n_1 x_0 x_0_inv X_11 AGGR #i #j.
+    (((OTEEReceiveServerHello( OTEE, AGGR_pk, n_1 ) @ #i) ∧
+      (OTEEDH( OTEE, x_0, x_0_inv, X_11 ) @ #i)) ∧
+     (AggressorPK( AGGR, AGGR_pk ) @ #j)) ⇒
+    (∃ X_00 x_1 #k. AggrDH( AGGR, X_00, x_1, X_11 ) @ #k)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ OTEE AGGR_pk n_1 x_0 x_0_inv X_11 AGGR #i #j.
+  (OTEEReceiveServerHello( OTEE, AGGR_pk, n_1 ) @ #i) ∧
+  (OTEEDH( OTEE, x_0, x_0_inv, X_11 ) @ #i) ∧
+  (AggressorPK( AGGR, AGGR_pk ) @ #j)
+ ∧
+  ∀ X_00 x_1 #k. (AggrDH( AGGR, X_00, x_1, X_11 ) @ #k) ⇒ ⊥"
+*/
+by sorry
+
+lemma auto_OTEEServerNonceSource [reuse]:
+  all-traces
+  "∀ OTEE u n_1 #i.
+    (OTEESessionAggrNonce( OTEE, u, n_1 ) @ #i) ⇒
+    ((∃ AGGR #j. AggrNonce( AGGR, n_1 ) @ #j) ∨
+     (∃ #j. !KU( n_1 ) @ #j))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ OTEE u n_1 #i.
+  (OTEESessionAggrNonce( OTEE, u, n_1 ) @ #i)
+ ∧
+  (∀ AGGR #j. (AggrNonce( AGGR, n_1 ) @ #j) ⇒ ⊥) ∧
+  (∀ #j. (!KU( n_1 ) @ #j) ⇒ ⊥)"
+*/
+by sorry
+
+lemma auto_ifServerAndOTEEDeriveSameKeyTheAdversaryCannotLearnIt [reuse]:
+  all-traces
+  "∀ AGGR OTEE DHE #i #j #k.
+    ((((AggrDHKey( AGGR, DHE ) @ #i) ∧ (OTEEDHKey( OTEE, DHE ) @ #j)) ∧
+      (!KU( DHE ) @ #k)) ∧
+     (#k < #j)) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ AGGR OTEE DHE #i #j #k.
+  (AggrDHKey( AGGR, DHE ) @ #i) ∧
+  (OTEEDHKey( OTEE, DHE ) @ #j) ∧
+  (!KU( DHE ) @ #k)
+ ∧
+  #k < #j"
+*/
+by sorry
+
+lemma auto_ifServerAndOTEEDeriveSameKeyTheAdversaryCannotLearnServerHandshakeSecret [reuse]:
+  all-traces
+  "∀ AGGR OTEE DHE key #i #j #k.
+    (((((AggrDHKey( AGGR, DHE ) @ #i) ∧
+        (OTEEDHKey( OTEE, DHE ) @ #j)) ∧
+       (OTEEServerHandshakeKey( key ) @ #j)) ∧
+      (!KU( key ) @ #k)) ∧
+     (#k < #j)) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ AGGR OTEE DHE key #i #j #k.
+  (AggrDHKey( AGGR, DHE ) @ #i) ∧
+  (OTEEDHKey( OTEE, DHE ) @ #j) ∧
+  (OTEEServerHandshakeKey( key ) @ #j) ∧
+  (!KU( key ) @ #k)
+ ∧
+  #k < #j"
+*/
+by sorry
+
+lemma auto_ifServerAndOTEEDeriveSameKeyTheAdversaryCannotLearnClientHandshakeSecret [reuse]:
+  all-traces
+  "∀ AGGR OTEE DHE key #i #j #k.
+    (((((AggrDHKey( AGGR, DHE ) @ #i) ∧
+        (AggrClientHandshakeKey( key ) @ #i)) ∧
+       (OTEEDHKey( OTEE, DHE ) @ #j)) ∧
+      (!KU( key ) @ #k)) ∧
+     (#k < #i)) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ AGGR OTEE DHE key #i #j #k.
+  (AggrDHKey( AGGR, DHE ) @ #i) ∧
+  (AggrClientHandshakeKey( key ) @ #i) ∧
+  (OTEEDHKey( OTEE, DHE ) @ #j) ∧
+  (!KU( key ) @ #k)
+ ∧
+  #k < #i"
+*/
+by sorry
+
+lemma auto_twoOTEEsCannotHaveSameDHE [reuse]:
+  all-traces
+  "∀ OTEE OTEE2 DHE #i #j.
+    (((OTEEDHKey( OTEE, DHE ) @ #i) ∧ (OTEEDHKey( OTEE2, DHE ) @ #j)) ∧
+     (¬(#i = #j))) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ OTEE OTEE2 DHE #i #j.
+  (OTEEDHKey( OTEE, DHE ) @ #i) ∧ (OTEEDHKey( OTEE2, DHE ) @ #j)
+ ∧
+  ¬(#i = #j)"
+*/
+by sorry
+
+lemma auto_twoAggrCannotHaveSameDHE [reuse]:
+  all-traces
+  "∀ AGGR AGGR2 DHE #i #j.
+    (((AggrDHKey( AGGR, DHE ) @ #i) ∧ (AggrDHKey( AGGR2, DHE ) @ #j)) ∧
+     (¬(#i = #j))) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ AGGR AGGR2 DHE #i #j.
+  (AggrDHKey( AGGR, DHE ) @ #i) ∧ (AggrDHKey( AGGR2, DHE ) @ #j)
+ ∧
+  ¬(#i = #j)"
+*/
+by sorry
+
+lemma auto_ifServerAndOTEEHaveSameKeyThenTheyCommunicated [reuse]:
+  all-traces
+  "∀ OTEE DHE AGGR ltk pk_ltk #i #j.
+    (((OTEEDHKey( OTEE, DHE ) @ #i) ∧ (AggrDHKey( AGGR, DHE ) @ #j)) ∧
+     (AggrServerHelloPK( AGGR, ltk, pk_ltk ) @ #j)) ⇒
+    (∃ n_1. OTEEReceiveServerHello( OTEE, pk_ltk, n_1 ) @ #i)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ OTEE DHE AGGR ltk pk_ltk #i #j.
+  (OTEEDHKey( OTEE, DHE ) @ #i) ∧
+  (AggrDHKey( AGGR, DHE ) @ #j) ∧
+  (AggrServerHelloPK( AGGR, ltk, pk_ltk ) @ #j)
+ ∧
+  ∀ n_1. (OTEEReceiveServerHello( OTEE, pk_ltk, n_1 ) @ #i) ⇒ ⊥"
+*/
+by sorry
+
+lemma auto_adversaryCannotKnowDHEBeforeReveal [reuse]:
+  all-traces
+  "∀ OTEE key DHE AGGR #i #k #l.
+    (((((OTEERevealSecretKey( OTEE, key ) @ #i) ∧
+        (OTEEChallengeResponseKey( OTEE, DHE ) @ #i)) ∧
+       (AggrDHKey( AGGR, DHE ) @ #k)) ∧
+      (!KU( DHE ) @ #l)) ∧
+     (#l < #i)) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ OTEE key DHE AGGR #i #k #l.
+  (OTEERevealSecretKey( OTEE, key ) @ #i) ∧
+  (OTEEChallengeResponseKey( OTEE, DHE ) @ #i) ∧
+  (AggrDHKey( AGGR, DHE ) @ #k) ∧
+  (!KU( DHE ) @ #l)
+ ∧
+  #l < #i"
+*/
+by sorry
+
+lemma auto_AdversaryNeverLearnsT [reuse]:
+  all-traces
+  "∀ OTEE t invT g2_t g2_inv_t #i #j.
+    ((OTEESecret( OTEE, t, invT, g2_t, g2_inv_t ) @ #i) ∧
+     (!KU( t ) @ #j)) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ OTEE t invT g2_t g2_inv_t #i #j.
+  (OTEESecret( OTEE, t, invT, g2_t, g2_inv_t ) @ #i) ∧
+  (!KU( t ) @ #j)"
+*/
+by sorry
+
+lemma auto_AdversaryNeverLearnsInvT [reuse]:
+  all-traces
+  "∀ OTEE t invT g2_t g2_inv_t #i #j.
+    ((OTEESecret( OTEE, t, invT, g2_t, g2_inv_t ) @ #i) ∧
+     (!KU( invT ) @ #j)) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ OTEE t invT g2_t g2_inv_t #i #j.
+  (OTEESecret( OTEE, t, invT, g2_t, g2_inv_t ) @ #i) ∧
+  (!KU( invT ) @ #j)"
+*/
+by sorry
+
+lemma auto_AdversaryNeverLearnsS [reuse]:
+  all-traces
+  "∀ AGGR s #i #j. ((AggrS( AGGR, s ) @ #i) ∧ (!KU( s ) @ #j)) ⇒ (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ AGGR s #i #j. (AggrS( AGGR, s ) @ #i) ∧ (!KU( s ) @ #j)"
+*/
+by sorry
+
+lemma auto_OTEEExponentsLemma [reuse]:
+  all-traces
+  "∀ OTEE e1 e2 DHE AGGR #i #j #k.
+    (((((OTEEExponents( OTEE, e1, e2 ) @ #i) ∧
+        (OTEEDHKey( OTEE, DHE ) @ #i)) ∧
+       (AggrS( AGGR, e1 ) @ #j)) ∧
+      (AggrDHKey( AGGR, DHE ) @ #j)) ∧
+     (!KU( e2 ) @ #k)) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ OTEE e1 e2 DHE AGGR #i #j #k.
+  (OTEEExponents( OTEE, e1, e2 ) @ #i) ∧
+  (OTEEDHKey( OTEE, DHE ) @ #i) ∧
+  (AggrS( AGGR, e1 ) @ #j) ∧
+  (AggrDHKey( AGGR, DHE ) @ #j) ∧
+  (!KU( e2 ) @ #k)"
+*/
+by sorry
+
+lemma auto_AdversaryNeverLearnsG2TBeforeT [reuse]:
+  all-traces
+  "∀ OTEE t invT g2_t g2_inv_t #i #j.
+    (((OTEESecret( OTEE, t, invT, g2_t, g2_inv_t ) @ #i) ∧
+      (!KU( g2_t ) @ #j)) ∧
+     (#j < #i)) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ OTEE t invT g2_t g2_inv_t #i #j.
+  (OTEESecret( OTEE, t, invT, g2_t, g2_inv_t ) @ #i) ∧
+  (!KU( g2_t ) @ #j)
+ ∧
+  #j < #i"
+*/
+by sorry
+
+lemma auto_AdversaryNeverLearnsG2InvTBeforeT [reuse]:
+  all-traces
+  "∀ OTEE t invT g2_t g2_inv_t #i #j.
+    (((OTEESecret( OTEE, t, invT, g2_t, g2_inv_t ) @ #i) ∧
+      (!KU( g2_inv_t ) @ #j)) ∧
+     (#j < #i)) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ OTEE t invT g2_t g2_inv_t #i #j.
+  (OTEESecret( OTEE, t, invT, g2_t, g2_inv_t ) @ #i) ∧
+  (!KU( g2_inv_t ) @ #j)
+ ∧
+  #j < #i"
+*/
+by sorry
+
+lemma auto_ImpossibleBeforeXCH [reuse]:
+  all-traces
+  "∀ x #i #j.
+    (((ImpossibleBeforeXCH( x ) @ #i) ∧ (!KU( x ) @ #j)) ∧ (#j < #i)) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ x #i #j.
+  (ImpossibleBeforeXCH( x ) @ #i) ∧ (!KU( x ) @ #j) ∧ #j < #i"
+*/
+by sorry
+
+lemma auto_ImpossibleBeforeUCH [reuse]:
+  all-traces
+  "∀ u #i #j.
+    (((ImpossibleBeforeUCH( u ) @ #i) ∧ (!KU( u ) @ #j)) ∧ (#j < #i)) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ u #i #j.
+  (ImpossibleBeforeUCH( u ) @ #i) ∧ (!KU( u ) @ #j) ∧ #j < #i"
+*/
+by sorry
+
+lemma auto_adversaryCannotKnowMeasurementPositionBeforeMeasurement [reuse]:
+  all-traces
+  "∀ OTEE ch_pos ch_prop AGGR #i #j.
+    ((OTEEMeasure( OTEE, ch_pos, ch_prop ) @ #i) ∧
+     (AggrMeasurementSelection( AGGR, ch_pos ) @ #j)) ⇒
+    (¬(∃ #k. (!KU( ch_pos ) @ #k) ∧ (#k < #i)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ OTEE ch_pos ch_prop AGGR #i #j.
+  (OTEEMeasure( OTEE, ch_pos, ch_prop ) @ #i) ∧
+  (AggrMeasurementSelection( AGGR, ch_pos ) @ #j)
+ ∧
+  ∃ #k. (!KU( ch_pos ) @ #k) ∧ #k < #i"
+*/
+by sorry
+
+lemma auto_token_integrity [reuse]:
+  all-traces
+  "∀ AGGR OTEE #i.
+    (AcceptVerification( AGGR, OTEE ) @ #i) ⇒
+    (∃ D NP #j.
+      (OTEERegisteredOnDevice( NP, OTEE, D ) @ #j) ∧ (#j < #i))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ AGGR OTEE #i.
+  (AcceptVerification( AGGR, OTEE ) @ #i)
+ ∧
+  ∀ D NP #j.
+   (OTEERegisteredOnDevice( NP, OTEE, D ) @ #j) ⇒ ¬(#j < #i)"
+*/
+by sorry
+
+lemma auto_measurementPositionIsUnique [reuse]:
+  all-traces
+  "∀ OTEE OTEE2 pos #i #j.
+    (((OTEEPosition( OTEE, pos ) @ #i) ∧
+      (OTEEPosition( OTEE2, pos ) @ #j)) ∧
+     (¬(#i = #j))) ⇒
+    (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ OTEE OTEE2 pos #i #j.
+  (OTEEPosition( OTEE, pos ) @ #i) ∧
+  (OTEEPosition( OTEE2, pos ) @ #j)
+ ∧
+  ¬(#i = #j)"
+*/
+by sorry
+
+lemma auto_succeessfultVerificationImpliesEnclaveMeasuredCorrectProperties [reuse]:
+  all-traces
+  "∀ AGGR OTEE A prop pos #i #j.
+    (((AcceptVerificationWithAgent( AGGR, OTEE, A, prop ) @ #i) ∧
+      (AcceptVerificationPosition( AGGR, pos ) @ #i)) ∧
+     (OTEEPosition( OTEE, pos ) @ #j)) ⇒
+    (∃ D. OTEEHonestPropertyRead( OTEE, D, A, prop ) @ #j)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ AGGR OTEE A prop pos #i #j.
+  (AcceptVerificationWithAgent( AGGR, OTEE, A, prop ) @ #i) ∧
+  (AcceptVerificationPosition( AGGR, pos ) @ #i) ∧
+  (OTEEPosition( OTEE, pos ) @ #j)
+ ∧
+  ∀ D. (OTEEHonestPropertyRead( OTEE, D, A, prop ) @ #j) ⇒ ⊥"
+*/
+by sorry
+
+lemma auto_binding_integrity:
+  all-traces
+  "∀ AGGR OTEE A prop #i.
+    (AcceptVerificationWithAgent( AGGR, OTEE, A, prop ) @ #i) ⇒
+    (∃ NP D DHE #j #k #l #m #n.
+      ((((OTEERegisteredOnDevice( NP, OTEE, D ) @ #j) ∧
+         (OTEEHonestPropertyRead( OTEE, D, A, prop ) @ #k)) ∧
+        (AggressorCreateAgent( AGGR, A, prop ) @ #l)) ∧
+       (AggrDHKey( AGGR, DHE ) @ #m)) ∧
+      (OTEEDHKey( OTEE, DHE ) @ #n))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ AGGR OTEE A prop #i.
+  (AcceptVerificationWithAgent( AGGR, OTEE, A, prop ) @ #i)
+ ∧
+  ∀ NP D DHE #j #k #l #m #n.
+   (OTEERegisteredOnDevice( NP, OTEE, D ) @ #j) ∧
+   (OTEEHonestPropertyRead( OTEE, D, A, prop ) @ #k) ∧
+   (AggressorCreateAgent( AGGR, A, prop ) @ #l) ∧
+   (AggrDHKey( AGGR, DHE ) @ #m) ∧
+   (OTEEDHKey( OTEE, DHE ) @ #n)
+  ⇒
+   ⊥"
+*/
+by sorry
+
+lemma executable:
+  exists-trace
+  "∃ AGGR OTEE A prop NP #i #j.
+    ((AcceptVerificationWithAgent( AGGR, OTEE, A, prop ) @ #i) ∧
+     (InitializeNP( NP ) @ #j)) ∧
+    (∀ NP2 #j2. (InitializeNP( NP2 ) @ #j2) ⇒ (#j = #j2))"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ AGGR OTEE A prop NP #i #j.
+  (AcceptVerificationWithAgent( AGGR, OTEE, A, prop ) @ #i) ∧
+  (InitializeNP( NP ) @ #j)
+ ∧
+  ∀ NP2 #j2. (InitializeNP( NP2 ) @ #j2) ⇒ #j = #j2"
+*/
+simplify
+solve( Aggressor_1( $AGGR, 'g', 'g2', ~prop, ~s, $A, ~ltk, n_0,
+                    X_00, n_1, ~x_1, X_11, DHE
+       ) ▶₀ #i )
+  case Server_Hello
+  solve( !NP_Pk( $NP, pk(x.1) ) ▶₂ #i )
+    case NP_Init
+    solve( !KU( sign(<$otee_id, pk(~OTEE)>, ~ltk.1) ) @ #vk.6 )
+      case NP_Register_OTEE_On_Device
+      solve( !KU( senc(hmac(derive_secret(derive_secret('g'^(~x*~x_1),
+                                                        'c_hs_traffic'),
+                                          'finished'),
+                            <<n_0, 'g'^~x, add('g2'^~s, z), 'g'^~x_1, pk(~ltk)>,
+                             h3(<n_0, 'g'^~x, add('g2'^~s, z), 'g'^~x_1, pk(~ltk)>)>),
+                       derive_secret('g'^(~x*~x_1), 'c_hs_traffic'))
+             ) @ #vk.2 )
+        case OTEE_Challenge_Response_case_01
+        solve( !KU( senc(<z, z.1,
+                          sign(<z, z.1, $otee_id,
+                                hmac(derive_secret(derive_secret('g'^(~x*~x_1), 'c_hs_traffic'),
+                                                   'finished'),
+                                     <
+                                      <'g2'^~u, 'g'^~x,
+                                       add('g2'^~s,
+                                           'g2'^(~u*h2('0', measure(select('g'^(~x*~x_1)), ~prop))
+                                                )),
+                                       'g'^~x_1, pk(~ltk)>,
+                                      h3(<'g2'^~u, 'g'^~x,
+                                          add('g2'^~s,
+                                              'g2'^(~u*
+                                                    h2('0', measure(select('g'^(~x*~x_1)), ~prop))
+                                                   )),
+                                          'g'^~x_1, pk(~ltk)>)
+                                     >)
+                               >,
+                               ~OTEE),
+                          $otee_id>,
+                         derive_secret(derive_secret('g'^(~x*~x_1), 'derived'),
+                                       'c_ap_traffic'))
+               ) @ #vk.5 )
+          case OTEE_Challenge_Response_case_1
+          solve( !KU( senc(sign(<
+                                 <'g2'^~u, 'g'^~x,
+                                  add('g2'^~s,
+                                      'g2'^(~u*h2('0', measure(select('g'^(~x*~x_1)), ~ch_prop)))),
+                                  'g'^~x_1>,
+                                 h3(<'g2'^~u, 'g'^~x,
+                                     add('g2'^~s,
+                                         'g2'^(~u*h2('0', measure(select('g'^(~x*~x_1)), ~ch_prop))
+                                              )),
+                                     'g'^~x_1>)
+                                >,
+                                ~ltk),
+                           derive_secret('g'^(~x*~x_1), 's_hs_traffic'))
+                 ) @ #vk.15 )
+            case Server_Hello
+            solve( !KU( senc(hmac(derive_secret(derive_secret('g'^(~x*~x_1),
+                                                              's_hs_traffic'),
+                                                'finished'),
+                                  <
+                                   <'g2'^~u, 'g'^~x,
+                                    add('g2'^~s,
+                                        'g2'^(~u*h2('0', measure(select('g'^(~x*~x_1)), ~ch_prop))
+                                             )),
+                                    'g'^~x_1>,
+                                   sign(<
+                                         <'g2'^~u, 'g'^~x,
+                                          add('g2'^~s,
+                                              'g2'^(~u*
+                                                    h2('0',
+                                                       measure(select('g'^(~x*~x_1)), ~ch_prop))
+                                                   )),
+                                          'g'^~x_1>,
+                                         h3(<'g2'^~u, 'g'^~x,
+                                             add('g2'^~s,
+                                                 'g2'^(~u*
+                                                       h2('0',
+                                                          measure(select('g'^(~x*~x_1)), ~ch_prop))
+                                                      )),
+                                             'g'^~x_1>)
+                                        >,
+                                        ~ltk)
+                                  >),
+                             derive_secret('g'^(~x*~x_1), 's_hs_traffic'))
+                   ) @ #vk.16 )
+              case Server_Hello
+              solve( !KU( pk(~OTEE) ) @ #vk.10 )
+                case NP_Register_OTEE_On_Device
+                solve( !KU( pk(~ltk) ) @ #vk.17 )
+                  case Aggressor_Init
+                  solve( !KU( 'g'^~x ) @ #vk.15 )
+                    case OTEE_Client_Hello
+                    solve( !KU( add('g2'^~s,
+                                    'g2'^(~u*h2('0', measure(select('g'^(~x*~x_1)), ~ch_prop))))
+                           ) @ #vk.16 )
+                      case Server_Hello
+                      solve( !KU( 'g'^~x_1 ) @ #vk.17 )
+                        case Server_Hello
+                        solve( (∃ AGGR #j.
+                                 (AggrNonce( AGGR,
+                                             add('g2'^~s,
+                                                 'g2'^(~u*
+                                                       h2('0',
+                                                          measure(select('g'^(~x*~x_1)), ~ch_prop))
+                                                      ))
+                                  ) @ #j))  ∥
+                               (∃ #j.
+                                 (!KU( add('g2'^~s,
+                                           'g2'^(~u*
+                                                 h2('0', measure(select('g'^(~x*~x_1)), ~ch_prop))))
+                                  ) @ #j)) )
+                          case case_1
+                          solve( !KU( 'g2'^~u ) @ #vk.17 )
+                            case OTEE_Challenge_Response_case_01
+                            by contradiction /* non-normal exponentiation rule instance */
+                          next
+                            case OTEE_Challenge_Response_case_02
+                            by contradiction /* non-normal exponentiation rule instance */
+                          next
+                            case OTEE_Challenge_Response_case_03
+                            by sorry
+                          next
+                            case OTEE_Challenge_Response_case_04
+                            by sorry
+                          next
+                            case OTEE_Challenge_Response_case_05
+                            by contradiction /* non-normal exponentiation rule instance */
+                          next
+                            case OTEE_Challenge_Response_case_06
+                            by sorry
+                          next
+                            case OTEE_Challenge_Response_case_07
+                            by contradiction /* non-normal exponentiation rule instance */
+                          next
+                            case OTEE_Challenge_Response_case_08
+                            by contradiction /* non-normal exponentiation rule instance */
+                          next
+                            case OTEE_Challenge_Response_case_09
+                            by sorry
+                          next
+                            case OTEE_Challenge_Response_case_10
+                            by sorry
+                          next
+                            case OTEE_Client_Hello
+                            solve( splitEqs(4) )
+                              case split
+                              SOLVED // trace found
+                            qed
+                          next
+                            case c_exp
+                            by sorry
+                          qed
+                        next
+                          case case_2
+                          by sorry
+                        qed
+                      next
+                        case c_exp
+                        by contradiction /* from formulas */
+                      qed
+                    next
+                      case c_add
+                      by sorry
+                    qed
+                  next
+                    case c_exp
+                    by contradiction /* from formulas */
+                  qed
+                next
+                  case c_pk
+                  by contradiction /* from formulas */
+                qed
+              next
+                case c_pk
+                by contradiction /* from formulas */
+              qed
+            next
+              case c_senc
+              by sorry
+            qed
+          next
+            case c_senc
+            by sorry
+          qed
+        next
+          case OTEE_Challenge_Response_case_2
+          by sorry
+        next
+          case c_senc
+          by sorry
+        qed
+      next
+        case OTEE_Challenge_Response_case_02
+        by sorry
+      next
+        case OTEE_Challenge_Response_case_03
+        by sorry
+      next
+        case OTEE_Challenge_Response_case_04
+        by sorry
+      next
+        case OTEE_Challenge_Response_case_05
+        by sorry
+      next
+        case OTEE_Challenge_Response_case_06
+        by sorry
+      next
+        case OTEE_Challenge_Response_case_07
+        by sorry
+      next
+        case OTEE_Challenge_Response_case_08
+        by sorry
+      next
+        case OTEE_Challenge_Response_case_09
+        by sorry
+      next
+        case OTEE_Challenge_Response_case_10
+        by sorry
+      next
+        case c_senc
+        by sorry
+      qed
+    next
+      case c_sign
+      by contradiction /* from formulas */
+    qed
+  qed
+qed
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* All wellformedness checks were successful. */
+
+/*
+Generated from:
+Tamarin version 1.11.0
+Maude version 3.5
+Git revision: a6df687a05c2473573749494bdd7752b109f22ae, branch: develop
+Compiled at: 2024-12-02 16:31:14.867376732 UTC
+*/
+
+end
