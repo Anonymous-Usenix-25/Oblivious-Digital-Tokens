@@ -1,6 +1,6 @@
 # Overview
 
-In the folder you can find the following:
+In the directory you can find the following:
 | Path | Description |
 | --- | --- |
 | `/enclave_application` | Contains code for an agent application that uses an OpenSSL server that is embedded in an Intel SGX enclave. |
@@ -17,6 +17,7 @@ The project and testing require the following software:
 - Intel SGX SSL
 
 We describe how to install each of them in the next section.
+We provide testing instructions after the installation instructions.
 
 # Setup
 This is the high-level procedure to setup the project:
@@ -48,7 +49,7 @@ files.
 
 ## Intel SGX SDK & PSW installation
 Since SGX SDK is not provided for `Manjaro Linux`, we build everything
-from source. For other distributions or preprequisites for manual
+from source. For other distributions or prerequisites for manual
 compilation check out the installation instructions in [the
 repository.](https://github.com/intel/linux-sgx). Tip: for most `make`
 commands, you can use the `-j` and `-l` flags to speed up compilation.
@@ -89,7 +90,7 @@ https://github.com/intel/intel-sgx-ssl/tree/support_tls_openssl3
 4. Go back to the root of the repository, `cd` into the `Linux`
    directory (make sure you are not in the `openssl_source/Linux`
    directory) and run `make all` once.
-   - The OpenSSL archive is now extraced in the
+   - The OpenSSL archive is now extracted in the
      `openssl_source/openssl-3.0.12` directory
 5. Modify the `Linux/build_openssl.sh` script as follows:
 ```bash
@@ -152,7 +153,7 @@ are described in the following subsections.
       server.
     - Also, note down the `Heap length: XXXXX` output from the
       client. In the next section we use the value to tell the web
-      server the lenght of the heap it is measuring.
+      server the length of the heap it is measuring.
 3. Start the ODT server according to the next subsection and then
    rerun the ODT client to get a successful verification.
 
@@ -316,10 +317,10 @@ the agent application for measurement testing.
        to `v`.
      - The difference of these two values is the time taken to
        calculate `v`.
-2. WIth the ODT server running, start the `script-for-server-testing.sh` script from the
+2. With the ODT server running, start the `script-for-server-testing.sh` script from the
    `timing_measurement` directory.
    - The script outputs the time the ODT server took to respond to the
-     handshake from the perspective of an umodified TLS client.
+     handshake from the perspective of an unmodified TLS client.
 
 ## Measuring OpenSSL server performance
 

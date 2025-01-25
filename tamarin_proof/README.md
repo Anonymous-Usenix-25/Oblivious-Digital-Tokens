@@ -1,6 +1,6 @@
 # Overview
 
-In the folder you can find the following files:
+In the directory you can find the following files:
 | Path | Description |
 | --- | --- |
 | `model.spthy` | Tamarin model of the ODT protocol. |
