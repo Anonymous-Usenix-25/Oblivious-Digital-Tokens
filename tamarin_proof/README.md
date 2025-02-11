@@ -5,9 +5,12 @@ In the directory you can find the following files:
 | --- | --- |
 | `model.spthy` | Tamarin model of the ODT protocol. |
 | `proof.spthy` | The complete proof of all lemmas for the ODT protocol. |
-| `partial-model.spthy` | Model of the ODT protocol where a non-automatically constructable lemma is already complete. |
+| `partial-proof.spthy` | Proof of the ODT protocol where a non-automatically constructable lemma is already complete. |
 | `myoracle.py` | Custom heuristic for proofs. |
 | `prove.sh` | Script you can use to verify automatically constructable lemmas. |
+
+The non-automatically constructable lemma is used to check if the protocol model is executable, i.e. there exists an honest execution of the protocol without adversary interference.
+The lemma is not used in the proof of the binding integrity property and serves only as a check that the protocol model works.
 
 # Setup
 
@@ -42,15 +45,17 @@ If you wish to check the proof yourself, you can execute:
 ```bash
 ./prove.sh
 ```
-This will run Tamarin on the `partial-model.spthy` file and output `proof2.spthy` and `proof2.log`.
+This will run Tamarin on the `partial-proof.spthy` file and output `proof2.spthy` and `proof2.log`.
 At the end of the log it should say that all proofs completed successfully.
-If you run tamarin in interactive mode as described above, you can inspect the proof file by clicking on `proof2.spthy`. Again, this might take a while until the proof is loaded.
+If you run tamarin in interactive mode as described above, you can inspect the proof file by clicking on `proof2.spthy`.
+Again, this might take a while until the proof is loaded.
 
-NB: there appears to be a bug in the current version of Tamarin where the proof output is missing commas (`,`) after the macro definitions. If the proof file does not appear in the Tamarin interface, you should perform the following:
-- To fix it you must open the `proof2.spthy` file and add a comma at
-  the end of all lines (except the last one) between `macros:` (close
-  to the beginning of the file) and the first `rule (modulo E)
-  NP_Init:` definition.
+Note: there appears to be a bug in the current version of Tamarin where the proof output is missing commas (`,`) after the macro definitions.
+If the proof file does not appear in the Tamarin interface, you should perform the following:
+- To fix it you must open the `proof2.spthy` file in a text editor and
+  add a comma at the end of all lines (except the last one) between
+  `macros:` (close to the beginning of the file) and the first `rule
+  (modulo E) NP_Init:` definition.
 
 # Proof complexity
 

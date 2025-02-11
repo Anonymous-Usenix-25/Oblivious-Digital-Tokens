@@ -1,0 +1,39 @@
+#!/bin/bash -e
+
+echo "This script will guide you through the setup process for the OpenSSL library."
+
+setup_openssl_repository() {
+    if git clone https://github.com/openssl/openssl/ openssl_normal/; then
+        echo "Finished cloning repository"
+    else
+        echo "Error: failed to clone OpenSSL repository"
+        exit
+    fi
+    cd openssl_normal/
+    git --no-advice checkout 707b54bee2
+    echo "Compiling OpenSSL"
+    ./config
+    make all -j7 -l6
+}
+
+if [[ -e "openssl_normal/" ]]; then
+    echo -n "OpenSSL git repository already exists. Overwrite and patch? [y/n]: "
+    read -r ans
+    case "$ans" in
+        y | Y)
+            rm -rf openssl_normal/
+            setup_openssl_repository
+            ;;
+
+        n | N)
+            echo "Skipping OpenSSL git repository setup"
+            ;;
+
+        *)
+            echo "Error"
+            exit
+            ;;
+    esac
+else
+    setup_openssl_repository
+fi

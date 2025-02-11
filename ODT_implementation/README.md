@@ -3,36 +3,49 @@
 In the directory you can find the following:
 | Path | Description |
 | --- | --- |
-| `/enclave_application` | Contains code for an agent application that uses an OpenSSL server that is embedded in an Intel SGX enclave. |
-| `/patches` | Various patch files used in the ODT setup. |
-| `/timing_measurement` | Scripts used to measure the execution speed of the ODT client and ODT server. |
+| `enclave_application/` | Contains code for an agent application that uses an OpenSSL server that is embedded in an Intel SGX enclave. |
+| `patches/` | Various patch files used in the ODT setup. |
+| `timing_measurement/` | Scripts used to measure the execution speed of the ODT client and ODT server. |
 | `complete-results.ods` | The raw timing measurements and the results. |
+| `scripts/` | Various scripts that perform steps described in this `README` file |
 
-The project and testing require the following software:
+The ODT prototype requires the following software:
 - Intel SGX SDK driver
-  - We use the out-of-tree driver because our system does not support
-      Flexible Launch Control (FLC)
+  - We use the out-of-tree driver because our system only support SGX1
+    capabilities
 - Intel SGX SDK
 - Intel SGX PSW
 - Intel SGX SSL
 
-We describe how to install each of them in the next section.
-We provide testing instructions after the installation instructions.
+We describe how to install each of them in the next section.  We
+provide testing instructions after the setup instructions and
+instructions for performing performance measurements in the last
+section.
 
 # Setup
 This is the high-level procedure to setup the project:
-1. Install the Intel SGX SDK driver, SDK and PSW.
-2. Install the Intel SGX SSL library.
-   - Patch the OpenSSL library included with the Intel SGX SSL
-     installation to support ODT client operation.
-3. Download OpenSSL and patch it to support ODT server operation.
-4. Compile an agent application that uses the patched Intel SGX SSL
-   library to connect to the patched ODT server.
+1. Install the Intel SGX SDK driver
+2. Go into the `scripts/` directory and run the `./setup.sh` script to
+   install and setup the following:
+   - Build tools for Intel SGX (for Ubuntu)
+   - Intel SGX SDK library
+   - Intel SGX PSW library
+   - Intel SGX SSL library with O-TEE functionality
+   - OpenSSL with ODT server functionality
+   - Agent application that uses the O-TEE to connect over TLS
 
-Note that we developed our prototype on `Manjaro Linux` with the
-`6.6.71-1` kernel on an `Intel(R) Core(TM) i5-10210U CPU @ 1.60GHz`
-CPU. For other systems, follow the installation instructions found at
-Github pages of the original libraries.
+Each of these steps has a corresponding script in case one of the
+steps fail and you wish to manually retry. You can find references to
+other scripts in the `./setup.sh` script. Everything in the
+`./setup.sh` script should work on other Linux distributions except
+the build tools setup, which we tailored to Ubuntu due to its
+popularity. Note that we developed our prototype and scripts on
+`Manjaro Linux` with the `6.6.71-1` kernel on an `Intel(R) Core(TM)
+i5-10210U CPU @ 1.60GHz` CPU.
+
+**Note that it is important that you are in the `scripts/` directory
+when running the `./setup.sh` script!**
+
 
 ## Intel SGX SDK driver installation
 The Intel SGX SDK driver should be included in the latest Linux
@@ -47,7 +60,14 @@ errors. Note that it does not compile on newer kernels, and for older
 kernels you can try to apply our `patches/PKGBUILD.patch` to the build
 files.
 
+> :warning: **The rest of the setup instructions is already captured
+> in the `./setup.sh` script**: we leave the instructions in to
+> document how the scripts work. If `./setup.sh` ran successfully, you
+> can skip to the next section.
+
+
 ## Intel SGX SDK & PSW installation
+
 Since SGX SDK is not provided for `Manjaro Linux`, we build everything
 from source. For other distributions or prerequisites for manual
 compilation check out the installation instructions in [the
@@ -80,8 +100,8 @@ We use the `support_tls_openssl3` branch of the library:
 https://github.com/intel/intel-sgx-ssl/tree/support_tls_openssl3
 
 1. Clone the repository from
-   [here](https://github.com/intel/intel-sgx-ssl) and `git checkout` the
-   branch `support_tls_openssl3`
+   [here](https://github.com/intel/intel-sgx-ssl) and `git checkout`
+   the branch `support_tls_openssl3`
 2. Make sure you are in a `bash` shell and `source` the
    `/opt/intel/sgxsdk/environment` file.
 3. Download the `openssl-3.0.12.tar.gz` archive from
@@ -115,7 +135,8 @@ https://github.com/intel/intel-sgx-ssl/tree/support_tls_openssl3
 Clone the [OpenSSL repository](https://github.com/openssl/openssl/)
 and checkout the `707b54bee2` commit.
 
-1. Apply `patches/ODT-server.patch` to the OpenSSL library using `git apply`.
+1. Apply `patches/ODT-server.patch` to the OpenSSL library using `git
+   apply`.
 2. Run `./config` and `make all` in the OpenSSL directory.
 
 ## Agent enclave application setup
@@ -129,6 +150,17 @@ cmake --build .
 ```
 
 # Heap verification test
+
+In order to run a heap verification test, you must change to the
+`scripts/` directory and run the `./heap_verification.sh` script. It
+will configure and recompile all of the libraries for heap
+verification and then perform a heap verification test. If successful,
+you should see `ODT verification success` printed to the screen.
+
+> :warning: **The rest of the heap verification test instructions is
+> already captured in the `./heap_verification.sh` script**: we leave
+> the instructions in to document how the script works.
+
 The client and server are by default configured for heap
 verification. If you wish to test this out follow the steps
 bellow. For stack verification, see next section.
@@ -160,7 +192,8 @@ are described in the following subsections.
 ## ODT server
 
 1. Switch to the OpenSSL ODT server root directory
-2. Set the `LD_LIBRARY_PATH` to `.` by calling `export LD_LIBRARY_PATH .`
+2. Set the `LD_LIBRARY_PATH` to `.` by calling `export LD_LIBRARY_PATH
+   .`
 3. Generate an RSA key and self-signed certificate.
    - `./apps/openssl genrsa -out server.key 4096` generates a key
    - `./apps/openssl req -new -x509 -key server.key -out
@@ -180,6 +213,24 @@ are described in the following subsections.
 
 
 # Stack verification test
+
+In order to run a stack verification test, you must change to the
+`scripts/` directory and run the `./stack_verification.sh` script. It
+will configure and recompile all of the libraries for stack
+verification and then perform a stack verification test. If
+successful, you should see `ODT verification success` printed to the
+screen.
+
+Note that the script will temporarily disable address space layout
+randomization (ASLR). In case the script fails you can run the
+`./enable_aslr.sh` script to enable ASLR again. Otherwise, ASLR will
+be enabled automatically again the next time you restart your device
+or when the script runs successfully.
+
+> :warning: **The rest of the stack verification test instructions is
+> already captured in the `./stack_verification.sh` script**: we leave
+> the instructions in to document how the script works.
+
 Stack verification demonstrates how a server can verify a client
 without the need to forward any data. Both the client and the server
 generate a seeded array of random values. If the measurements are
@@ -200,8 +251,8 @@ itself. However, this goes beyond the scope of our prototype.
 
 1. Open the `Configure` file in the `openssl_source/openssl-3.0.12`
    directory of the Intel SGX SSL library.
-   - Set `ODT_VERIFY_HEAP` to `0` and `ODT_VERIFY_STACK` to `1`
-     (line 1646).
+   - Set `ODT_VERIFY_HEAP` to `0` and `ODT_VERIFY_STACK` to `1` (line
+     1646).
    - Recompile the OpenSSL library by running `make all` twice. This
      is necessary to detect changes in the configuration.
    - Recompile and reinstall the Intel SGX SSL library by running
@@ -245,6 +296,21 @@ application to check that stack verification is working properly.
 
 # Timing measurements
 
+In order to perform timing measurements, you must change to the
+`scripts/` directory and run the `./runtime_measurement.sh` script. It
+will configure and recompile all of the libraries for runtime
+measurement and then perform various combinations of timing
+measurements needed to construct Table 2 and Table 3 in the Oblivious
+Digital Tokens Usenix paper.
+
+Once the measurements are completed you can run
+`./analyze_results.py`. The Python script will output the results of
+the measurements in the format of Table 2 and Table 3 from the paper.
+
+> :warning: **The rest of the timing measurements instructions is
+> already captured in the `./runtime_measurement.sh` script**: we
+> leave the instructions in to document how the script works.
+
 We perform all timing measurements using heap verification and all
 debugging disabled. Follow the next steps to prepare all libraries and
 the agent application for measurement testing.
@@ -277,7 +343,12 @@ the agent application for measurement testing.
      not, you can compile a fresh version of OpenSSL without the ODT
      patch and use the same command line option that is used to start
      the modified ODT OpenSSL server.
-2. Run the `ODT-client.sh` script from the `timing_measurement` directory
+   - Note that the `runtime_measurement.sh` script downloads and
+     compiles an unmodified OpenSSL installation of the same version
+     used for the Intel SGX SSL library to provide a more relevant
+     comparison.
+2. Run the `ODT-client.sh` script from the `timing_measurement`
+   directory
    - The script takes as the first argument the absolute path to the
      `build/` directory of the agent application.
    - The output of the script is a pair of values separated by a
@@ -298,7 +369,10 @@ the agent application for measurement testing.
    directory.
    - The script takes as the first argument the absolute path to a
      directory where an unmodified OpenSSL library is installed.
-     - We used the system provided library found in `/usr/bin/`
+     - Note that the `runtime_measurement.sh` script downloads and
+       compiles an unmodified OpenSSL installation of the same version
+       used for the Intel SGX SSL library to provide a more relevant
+       comparison.
    - The output of the script is a single value. It is the total time
      taken for the OpenSSL client to run a single handshake with the
      server.
@@ -317,8 +391,9 @@ the agent application for measurement testing.
        to `v`.
      - The difference of these two values is the time taken to
        calculate `v`.
-2. With the ODT server running, start the `script-for-server-testing.sh` script from the
-   `timing_measurement` directory.
+2. With the ODT server running, start the
+   `script-for-server-testing.sh` script from the `timing_measurement`
+   directory.
    - The script outputs the time the ODT server took to respond to the
      handshake from the perspective of an unmodified TLS client.
 

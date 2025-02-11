@@ -1,0 +1,361 @@
+diff --git a/psw/ae/aesm_service/source/CMakeLists.txt b/psw/ae/aesm_service/source/CMakeLists.txt
+index 98c724a7..5728e9b4 100644
+--- a/psw/ae/aesm_service/source/CMakeLists.txt
++++ b/psw/ae/aesm_service/source/CMakeLists.txt
+@@ -61,7 +61,7 @@ if(REF_LE)
+ endif()
+ 
+ set(CMAKE_CXX_STANDARD_REQUIRED 1)
+-set(CMAKE_CXX_STANDARD 11)
++set(CMAKE_CXX_STANDARD 17)
+ set(CMAKE_SKIP_BUILD_RPATH true)
+ 
+ ########## SGX SDK Settings ##########
+diff --git a/psw/enclave_common/sgx_enclave_common.cpp b/psw/enclave_common/sgx_enclave_common.cpp
+index 9867ecc8..5b748389 100644
+--- a/psw/enclave_common/sgx_enclave_common.cpp
++++ b/psw/enclave_common/sgx_enclave_common.cpp
+@@ -34,6 +34,7 @@
+ #include <sys/types.h>
+ #include <dlfcn.h>
+ #include <map>
++#include <algorithm>
+ #include <functional>
+ #include "sgx_enclave_common.h"
+ #include "sgx_urts.h"
+@@ -141,7 +142,7 @@ static void close_device(void)
+ static int get_file_handle_from_base_address(void* base_address)
+ {
+     int hfile = -1;
+-    
++
+     //find the enclave file handle from the target address
+     LockGuard lock(&s_enclave_mutex);
+     if(s_hfile.count(base_address) != 0)
+@@ -154,7 +155,7 @@ static int get_file_handle_from_base_address(void* base_address)
+ static void* get_enclave_base_address_from_address(void* target_address)
+ {
+     void* base_addr = NULL;
+-        
++
+     //find the enclave file handle from the target address
+     LockGuard lock(&s_enclave_mutex);
+     if(s_enclave_base_address.empty())
+@@ -277,7 +278,7 @@ static uint32_t error_driver2api(int driver_error, int err_no)
+             break;
+         case (int)EACCES:
+             ret = ENCLAVE_NOT_AUTHORIZED;
+-            SE_PROD_LOG("Enclave not authorized to run, .e.g. provisioning enclave hosted in app " 
++            SE_PROD_LOG("Enclave not authorized to run, .e.g. provisioning enclave hosted in app "
+                     "without access rights to /dev/sgx_provision. You need add the user id to group "
+                     "sgx_prv or run the app as root.\n");
+             break;
+@@ -309,7 +310,7 @@ static uint32_t error_driver2api(int driver_error, int err_no)
+             break;
+         case SGX_INVALID_PRIVILEGE:
+             ret = ENCLAVE_NOT_AUTHORIZED;
+-            SE_PROD_LOG("Enclave not authorized to run, .e.g. provisioning enclave hosted in app " 
++            SE_PROD_LOG("Enclave not authorized to run, .e.g. provisioning enclave hosted in app "
+                     "without access rights to /dev/sgx_provision. You need add the user id to group "
+                     "sgx_prv or run the app as root.\n");
+             break;
+@@ -367,7 +368,7 @@ static bool check_elrange_params(enclave_elrange_t* input_data)
+     {
+         return false;
+     }
+-    //An enclave SECS.BASEADDR and SECS.SIZE must be aligned on a page size.  
++    //An enclave SECS.BASEADDR and SECS.SIZE must be aligned on a page size.
+     //In addition, the enclave image address must also start on a page size
+     if((input_data->elrange_size % SE_PAGE_SIZE != 0) ||
+         (input_data->elrange_start_address% SE_PAGE_SIZE != 0) ||
+@@ -416,7 +417,7 @@ static bool check_ex_params(const uint32_t ex_features, const void* ex_features_
+ {
+     //update last feature index if it fails here
+     se_static_assert(_ENCLAVE_CREATE_LAST_EX_FEATURE_IDX_ == ENCLAVE_CREATE_EX_EL_RANGE_BIT_IDX);
+-    
++
+     uint32_t i;
+ 
+     if (ex_features_p != NULL)
+@@ -433,7 +434,7 @@ static bool check_ex_params(const uint32_t ex_features, const void* ex_features_
+                 return false;
+         }
+     }
+-    
++
+     return ((ex_features | _ENCLAVE_CREATE_EX_FEATURES_MASK_) == _ENCLAVE_CREATE_EX_FEATURES_MASK_);
+ }
+ 
+@@ -441,7 +442,7 @@ static bool check_ex_params(const uint32_t ex_features, const void* ex_features_
+ #define GET_FEATURE_POINTER(feature_name, ex_features_p)    ex_features_p[feature_name##_BIT_IDX]
+ // Get the corresponding feature pointer for the input feature name
+ // This function should only be called for the features which have the corresponding feature structs
+-// Return value: 
++// Return value:
+ //    -1 - invalid input
+ //    0  - no such feature request
+ //    1  - has such feature request
+@@ -475,9 +476,9 @@ static void enclave_set_provision_access(int hdevice, void* enclave_base)
+     {
+         return;
+     }
+-    
++
+     int hdev_prov = -1;
+-    
++
+     if (s_driver_type == SGX_DRIVER_IN_KERNEL)
+     {
+         hdev_prov = open("/dev/sgx/provision", O_RDWR);
+@@ -576,7 +577,7 @@ extern "C" void* COMM_API enclave_create_ex(
+             *enclave_error = ENCLAVE_INVALID_PARAMETER;
+         return NULL;
+     }
+-    
++
+     if(check_ex_params(ex_features, ex_features_p) == false)
+     {
+         if (enclave_error != NULL)
+@@ -629,10 +630,10 @@ extern "C" void* COMM_API enclave_create_ex(
+                     *enclave_error = ENCLAVE_NOT_SUPPORTED;
+                 return NULL;
+             }
+-            
++
+         }
+     }
+-    
++
+     //if in-kernel driver then open the file for each enclave load
+     if (s_driver_type == SGX_DRIVER_IN_KERNEL)
+     {
+@@ -641,7 +642,7 @@ extern "C" void* COMM_API enclave_create_ex(
+                 *enclave_error = ENCLAVE_NOT_SUPPORTED;
+             return NULL;
+         }
+-        //The in-kernel driver does not do the base and size alignment. This is up to user mode to do it. 
++        //The in-kernel driver does not do the base and size alignment. This is up to user mode to do it.
+         //Therefore enclave_size will be virtual_size*2. The unused region will be released by calling munmap later.
+         enclave_size = virtual_size*2;
+         //check if elrange is set
+@@ -665,12 +666,12 @@ extern "C" void* COMM_API enclave_create_ex(
+         }
+         enclave_base = mmap(base_address, enclave_size, PROT_NONE, mmap_flag, -1, 0);
+     }
+-    else 
++    else
+     {
+         mmap_flag |= MAP_SHARED;
+         enclave_base = mmap(base_address, enclave_size, PROT_NONE, mmap_flag, hdevice_temp, 0);
+     }
+-    
++
+     if (enclave_base == MAP_FAILED) {
+         SE_TRACE(SE_TRACE_WARNING, "\ncreate enclave: mmap failed, errno = %d\n", errno);
+         if (enclave_error != NULL)
+@@ -681,7 +682,7 @@ extern "C" void* COMM_API enclave_create_ex(
+         }
+         return NULL;
+     }
+-    
++
+     if(enclave_elrange != NULL)
+     {
+         /* Note that older kernels which do not recognize the
+@@ -705,7 +706,7 @@ extern "C" void* COMM_API enclave_create_ex(
+             return NULL;
+         }
+     }
+-    
++
+     if(s_driver_type == SGX_DRIVER_IN_KERNEL && enclave_elrange == NULL)
+     {
+         uint64_t aligned_addr = ((uint64_t)enclave_base + virtual_size - 1) & ~(virtual_size - 1);
+@@ -741,7 +742,7 @@ extern "C" void* COMM_API enclave_create_ex(
+         }
+         enclave_base = (void*)aligned_addr;
+     }
+-    
++
+     if(enclave_elrange != NULL)
+     {
+         secs->base = reinterpret_cast<void*>(enclave_elrange->elrange_start_address);
+@@ -751,7 +752,7 @@ extern "C" void* COMM_API enclave_create_ex(
+     {
+         secs->base = enclave_base;
+     }
+-    
++
+     struct sgx_enclave_create param = { 0 };
+     param.src = POINTER_TO_U64(secs);
+ 
+@@ -770,7 +771,7 @@ extern "C" void* COMM_API enclave_create_ex(
+ 
+         return NULL;
+     }
+-    
++
+     //in-kernel and DCAP drivers support special provision key access mode (DCAP also supports whitelisting for provision key access)
+     if (((s_driver_type == SGX_DRIVER_IN_KERNEL) || (s_driver_type == SGX_DRIVER_DCAP)) && (secs->attributes.flags & SGX_FLAGS_PROVISION_KEY))
+     {
+@@ -802,7 +803,7 @@ extern "C" void* COMM_API enclave_create_ex(
+             s_enclave_elrange_map[enclave_base] = *enclave_elrange;
+         }
+     }
+-    
++
+     if (enclave_error != NULL)
+         *enclave_error = ENCLAVE_ERROR_SUCCESS;
+     return enclave_base;
+@@ -842,7 +843,7 @@ static bool enclave_do_mprotect_region(int hfile, void* target_address, size_t t
+             *enclave_error = ENCLAVE_INVALID_ENCLAVE;
+         return false;
+     }
+-    
++
+     auto enclave_mem_region = &s_enclave_mem_region[enclave_base];
+     //if target_size =0, means mprotect the last region
+     if(target_size != 0)
+@@ -871,7 +872,7 @@ static bool enclave_do_mprotect_region(int hfile, void* target_address, size_t t
+             enclave_mem_region->addr = target_address;
+             enclave_mem_region->len = target_size;
+             enclave_mem_region->prot = prot;
+-        } 
++        }
+         else {
+             //this load of enclave data is extending the memory region
+             enclave_mem_region->len += target_size;
+@@ -905,7 +906,7 @@ static bool enclave_do_mprotect_region(int hfile, void* target_address, size_t t
+ /* enclave_load_data()
+  * Parameters:
+  *      target_address [in] - The address in the enclave where you want to load the data.
+- *      target_size [in] - The size of the range that you want to load in the enclave, in bytes. 
++ *      target_size [in] - The size of the range that you want to load in the enclave, in bytes.
+  *      source_buffer [in, optional] - An optional pointer to the data you want to load into the enclave.
+  *      data_properties [in] - The properties of the pages you want to add to the enclave.
+  *      enclave_error [out, optional] - An optional pointer to a variable that receives an enclave error code.
+@@ -925,7 +926,7 @@ extern "C" size_t COMM_API enclave_load_data(
+             *enclave_error = ENCLAVE_INVALID_PARAMETER;
+         return 0;
+     }
+-    
++
+     sec_info_t sec_info;
+     memset(&sec_info, 0, sizeof(sec_info_t));
+     uint64_t elrange_start_address = 0;
+@@ -938,7 +939,7 @@ extern "C" size_t COMM_API enclave_load_data(
+         sec_info.flags |= SI_FLAG_REG;
+     else
+         sec_info.flags &= ~SI_MASK_MEM_ATTRIBUTE;
+-        
++
+     if (sec_info.flags & ENCLAVE_PAGE_UNVALIDATED)
+         sec_info.flags ^= ENCLAVE_PAGE_UNVALIDATED;
+ 
+@@ -966,7 +967,7 @@ extern "C" size_t COMM_API enclave_load_data(
+                 *enclave_error = ENCLAVE_INVALID_ADDRESS;
+             return 0;
+         }
+-        
++
+         if(get_elrange_from_base_address(enclave_base_addr, &enclave_elrange) == true)
+         {
+             elrange_start_address = enclave_elrange.elrange_start_address;
+@@ -988,8 +989,8 @@ extern "C" size_t COMM_API enclave_load_data(
+                 return 0;
+             }
+             memset(source, 0 , target_size);
+-        } 
+- 
++        }
++
+         struct sgx_enclave_add_pages_in_kernel addp;
+         memset(&addp, 0, sizeof(sgx_enclave_add_pages_in_kernel));
+         if(source_buffer != NULL)
+@@ -1000,7 +1001,7 @@ extern "C" size_t COMM_API enclave_load_data(
+         {
+             addp.src = POINTER_TO_U64(source);
+         }
+-           
++
+         addp.offset = POINTER_TO_U64((uint64_t)target_address - elrange_start_address);
+         addp.length = target_size;
+         addp.secinfo = POINTER_TO_U64(&sec_info);
+@@ -1030,12 +1031,12 @@ extern "C" size_t COMM_API enclave_load_data(
+             free(source);
+             source = NULL;
+         }
+-         
++
+     }
+     else
+     {
+         uint8_t page_data[SE_PAGE_SIZE]  __attribute__ ((aligned(4096)));
+-            
++
+         uint8_t* source = (uint8_t*)source_buffer;
+         if (source == NULL) {
+             source = page_data;
+@@ -1090,7 +1091,7 @@ extern "C" size_t COMM_API enclave_load_data(
+ /* enclave_initialize()
+  * Parameters:
+  *      base_address [in] - The enclave base address as returned from the enclave_create API.
+- *      info [in] - A pointer to the architecture-specific information to use to initialize the enclave. 
++ *      info [in] - A pointer to the architecture-specific information to use to initialize the enclave.
+  *      info_size [in] - The length of the structure that the info parameter points to, in bytes.
+  *      enclave_error [out, optional] - An optional pointer to a variable that receives an enclave error code.
+  * Return Value:
+@@ -1121,7 +1122,7 @@ extern "C" bool COMM_API enclave_initialize(
+             return false;
+         }
+     }
+-    
++
+     const enclave_init_sgx_t* enclave_init_sgx = (const enclave_init_sgx_t*)info;
+     if (info_size == 0 || sizeof(*enclave_init_sgx) != info_size) {
+         if (enclave_error != NULL)
+@@ -1141,7 +1142,7 @@ extern "C" bool COMM_API enclave_initialize(
+         //out-of-tree driver requires a launch token to be provided
+         sgx_attributes_t secs_attr;
+         memset(&secs_attr, 0, sizeof(sgx_attributes_t));
+-        
++
+         if(get_secs_attr_from_base_address(base_address, &secs_attr)== false)
+         {
+             if (enclave_error != NULL)
+@@ -1150,7 +1151,7 @@ extern "C" bool COMM_API enclave_initialize(
+             }
+             return false;
+         }
+-        
++
+         sgx_launch_token_t launch_token;
+         memset(launch_token, 0, sizeof(sgx_launch_token_t));
+ 
+@@ -1178,10 +1179,10 @@ extern "C" bool COMM_API enclave_initialize(
+         initp.einittoken = POINTER_TO_U64(&launch_token);
+ 
+         ret = ioctl(s_hdevice, SGX_IOC_ENCLAVE_INIT, &initp);
+-    } 
++    }
+     else if (s_driver_type == SGX_DRIVER_DCAP )
+     {
+-        //dcap driver does not need a launch token 
++        //dcap driver does not need a launch token
+         struct sgx_enclave_init_dcap initp = { 0, 0 };
+         initp.addr = POINTER_TO_U64(base_address);
+         initp.sigstruct = POINTER_TO_U64(enclave_init_sgx->sigstruct);
+diff --git a/sdk/tlibc/time/strptime.c b/sdk/tlibc/time/strptime.c
+index 08023a7c..9e62adc6 100644
+--- a/sdk/tlibc/time/strptime.c
++++ b/sdk/tlibc/time/strptime.c
+@@ -89,7 +89,9 @@ strptime(const char *buf, const char *fmt, struct tm *tm)
+ {
+ 	return(_strptime(buf, fmt, tm, 1));
+ }
++#if 0
+ DEF_WEAK(strptime);
++#endif
+ 
+ static char *
+ _strptime(const char *buf, const char *fmt, struct tm *tm, int initialize)
