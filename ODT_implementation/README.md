@@ -54,7 +54,7 @@ Flexible Launch Control (FLC) support.
 
 Because our CPU does not support FLC, we install the out-of-tree
 driver. We obtain the driver for Manjaro from the [AUR
-repository](https://aur.archlinux.org/packages/linux-sgx-driver-dkms-git). If
+repository.](https://aur.archlinux.org/packages/linux-sgx-driver-dkms-git) If
 you are using the `6.6.71-1` kernel, it should install without
 errors. Note that it does not compile on newer kernels, and for older
 kernels you can try to apply our `patches/PKGBUILD.patch` to the build
@@ -71,7 +71,7 @@ files.
 Since SGX SDK is not provided for `Manjaro Linux`, we build everything
 from source. For other distributions or prerequisites for manual
 compilation check out the installation instructions in [the
-repository.](https://github.com/intel/linux-sgx). Tip: for most `make`
+repository.](https://github.com/intel/linux-sgx) Tip: for most `make`
 commands, you can use the `-j` and `-l` flags to speed up compilation.
 
 1. Clone the repository from
@@ -117,8 +117,8 @@ https://github.com/intel/intel-sgx-ssl/tree/support_tls_openssl3
 # rm -rf $OPENSSL_VERSION
 # tar xvf $OPENSSL_VERSION.tar.gz || exit 1
 ```
-    - Commenting out those lines ensures that our OpenSSL patch in the
-      next step does not get overwritten.
+   - Commenting out those lines ensures that our OpenSSL patch in the
+     next step does not get overwritten.
 6. Apply `patches/ODT-client.patch` to the OpenSSL library (version
    3.0.12) found in the `openssl_source` directory to add ODT support
    to it.
@@ -179,13 +179,13 @@ are described in the following subsections.
 ```bash
 ./application aaa -server:127.0.0.1 -port:4433
 ```
-    - Once launched, the application dumps its heap into
-      `app_heap_dump`.
-    - Copy this file into the root directory of the OpenSSL ODT
-      server.
-    - Also, note down the `Heap length: XXXXX` output from the
-      client. In the next section we use the value to tell the web
-      server the length of the heap it is measuring.
+  - Once launched, the application dumps its heap into
+     `app_heap_dump`.
+   - Copy this file into the root directory of the OpenSSL ODT
+     server.
+   - Also, note down the `Heap length: XXXXX` output from the
+     client. In the next section we use the value to tell the web
+     server the length of the heap it is measuring.
 3. Start the ODT server according to the next subsection and then
    rerun the ODT client to get a successful verification.
 
@@ -275,8 +275,8 @@ cmake --build .
 ```bash
 ./application aaa -server:127.0.0.1 -port:4433
 ```
-    - Note down the `Stack length: XXXX` and `Offset of the stack
-      large_array YYYY` values for the next step.
+  - Note down the `Stack length: XXXX` and `Offset of the stack
+    large_array YYYY` values for the next step.
 5. Open the `Configure` file in the root directory of the ODT OpenSSL
    server and set `ODT_STACK_LENGTH` and `ODT_STACK_OFFSET` to the
    aforementioned values.
