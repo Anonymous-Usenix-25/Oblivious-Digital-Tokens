@@ -63,17 +63,16 @@ with open('results/ODT_server_ODT_generation.txt') as csvfile:
 
 
 def mean_and_stdev(data):
-    return str(round(statistics.mean(data) * 1000, 2)) + " ± " + str(round(statistics.stdev(data) * 1000, 2))
-
+    return "{:6.2f} ± {:5.2f}".format(statistics.mean(data) * 1000, statistics.stdev(data) * 1000)
 
 print("Table 2:")
-print("ODT Server (overall cost)    ", mean_and_stdev(ODT_server_handshake))
+print("ODT Server (overall cost)     ", mean_and_stdev(ODT_server_handshake))
 print("  (a) PPET commitment         ", mean_and_stdev(ODT_server_calculate_v))
 print("  (b) Elligator decoding      ", mean_and_stdev(ODT_server_elligator_encoding))
 print("OpenSSL Server                ", mean_and_stdev(OpenSSL_server_handshake))
 
 print()
 print("Table 3:")
-print("                ODT server       OpenSSLServer")
-print("O-TEE          ", mean_and_stdev(ODT_client_handshake_ODT_server), "     ", mean_and_stdev(ODT_client_handshake_OpenSSL_server))
-print("OpenSSL Client   ", mean_and_stdev(OpenSSL_client_ODT_server), "       ", mean_and_stdev(OpenSSL_client_OpenSSL_server))
+print("                    ODT server         OpenSSLServer")
+print("O-TEE {:>25} {:>20}".format(mean_and_stdev(ODT_client_handshake_ODT_server), mean_and_stdev(ODT_client_handshake_OpenSSL_server)))
+print("OpenSSL Client  {:>15} {:>20}".format(mean_and_stdev(OpenSSL_client_ODT_server), mean_and_stdev(OpenSSL_client_OpenSSL_server)))
