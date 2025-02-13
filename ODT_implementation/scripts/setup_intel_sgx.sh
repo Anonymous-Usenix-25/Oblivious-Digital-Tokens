@@ -54,11 +54,15 @@ install_sgx_sdk() {
     echo "Starting preparation"
     make preparation -j7 -l6
     echo "Finished preparation"
-    echo "Starting sdk compilation"
-    make sdk -j7 -l6
-    echo "Finished sdk compilation"
-    echo "Starting sdk installer compilation"
-    make sdk_install_pkg -j7 -l6
+    # No need to compile sdk separately, it will be compiled in the
+    # next step anyways.
+#    echo "Starting sdk compilation"
+#    make sdk -j7 -l6
+#    echo "Finished sdk compilation"
+    echo "Starting sdk installer compilation (also compiles Intel SDK)"
+    # It seems that the SDK compilation has a race condition so we
+    # limit it to only one processor core to avoid it.
+    make sdk_install_pkg -j1
     echo "Finished sdk installer compilation"
     echo "Running sdk installer"
     sudo ./linux/installer/bin/sgx_linux_x64_sdk_2.25.100.3.bin <<EOF
