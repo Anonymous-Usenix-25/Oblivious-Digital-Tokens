@@ -21,9 +21,9 @@ Once both are installed, you can explore the proof by starting an interactive Ta
 ```bash
 tamarin-prover interactive .
 ```
-After some time, this will open a local webserver that you can access by going to `http://127.0.0.1:3001`.
+This opens a local webserver that you can access by going to `http://127.0.0.1:3001`.
 
-Clicking on the `proof` link will load the complete proof. This operation usually takes some time.
+Clicking on the `proof` link will load the complete proof. This operation usually takes around 30 minutes.
 
 ## Encoding error
 
@@ -48,7 +48,7 @@ If you wish to check the proof yourself, you can execute:
 This will run Tamarin on the `partial-proof.spthy` file and output `proof2.spthy` and `proof2.log`.
 At the end of the log it should say that all proofs completed successfully.
 If you run tamarin in interactive mode as described above, you can inspect the proof file by clicking on `proof2.spthy`.
-Again, this might take a while until the proof is loaded.
+Again, this might take around 30 minutes until the proof is loaded.
 
 Note: there appears to be a bug in the current version of Tamarin where the proof output is missing commas (`,`) after the macro definitions.
 If the proof file does not appear in the Tamarin interface, you should perform the following:
@@ -59,5 +59,5 @@ If the proof file does not appear in the Tamarin interface, you should perform t
 
 # Proof complexity
 
-We construct the proof on a server with 252 GB of memory and with two `Intel Xeon E5-2650 v4` CPUs.
-The automatically constructable proofs take around 1232 second to complete.
+We construct the proof on a commodity laptop with an `Intel(R) Core(TM) i5-10210U CPU @ 1.60GHz` CPU, 8 GB of RAM and 10 GB of swap space.
+The automatically constructable proof take around 30 minutes to complete.
