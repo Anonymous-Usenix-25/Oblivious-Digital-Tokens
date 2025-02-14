@@ -46,7 +46,7 @@ If you wish to check the proof yourself, you can execute:
 ./prove.sh
 ```
 This will run Tamarin on the `partial-proof.spthy` file and output `proof2.spthy` and `proof2.log`.
-At the end of the log it should say that all proofs completed successfully.
+At the end of the log, it should say for all lemmas that they verified successfully.
 If you run tamarin in interactive mode as described above, you can inspect the proof file by clicking on `proof2.spthy`.
 Again, this might take around 30 minutes until the proof is loaded.
 
