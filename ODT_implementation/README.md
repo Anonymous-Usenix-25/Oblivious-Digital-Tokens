@@ -3,7 +3,7 @@
 In the directory you can find the following:
 | Path | Description |
 | --- | --- |
-| `enclave_application/` | Contains code for an agent application that uses an OpenSSL server that is embedded in an Intel SGX enclave. |
+| `enclave_application/` | Contains code for an agent application that uses an OpenSSL client that is embedded in an Intel SGX enclave. |
 | `patches/` | Various patch files used in the ODT setup. |
 | `timing_measurement/` | Scripts used to measure the execution speed of the ODT client and ODT server. |
 | `complete-results.ods` | The raw timing measurements and the results. |
@@ -43,7 +43,7 @@ popularity. Note that we developed our prototype and scripts on
 `Manjaro Linux` with the `6.6.71-1` kernel on an `Intel(R) Core(TM)
 i5-10210U CPU @ 1.60GHz` CPU.
 
-**Note that it is important that you are in the `scripts/` directory
+**It is important that you are in the `scripts/` directory
 when running the `./setup.sh` script!**
 
 
@@ -62,7 +62,7 @@ files.
 
 > :warning: **The rest of the setup instructions is already captured
 > in the `./setup.sh` script**: we leave the instructions in to
-> document how the scripts work. If `./setup.sh` ran successfully, you
+> document how the script works. If `./setup.sh` ran successfully, you
 > can skip to the next section.
 
 
