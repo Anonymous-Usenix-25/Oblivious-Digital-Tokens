@@ -63,7 +63,7 @@ files.
 > :warning: **The rest of the setup instructions is already captured
 > in the `./setup.sh` script**: we leave the instructions in to
 > document how the script works. If `./setup.sh` ran successfully, you
-> can skip to the next section.
+> can skip to the heap verification test section.
 
 
 ## Intel SGX SDK & PSW installation
