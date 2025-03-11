@@ -13,7 +13,7 @@ setup_sgx_sdk_repository() {
         exit
     fi
     cd linux-sgx/
-    git --no-advice checkout 7385e10ce1106215d15f874a024ca224c7417eea
+    git checkout 7385e10ce1106215d15f874a024ca224c7417eea
     cd sdk/cpprt/linux/libunwind/
     ./autogen.sh
     cd ../../../../
@@ -27,7 +27,7 @@ setup_sgx_sdk_repository() {
 
 if [[ -e "linux-sgx/" ]]; then
     echo -n "Intel SGX SDK git repository already exists. Overwrite and setup again? [y/n]: "
-    read -r ans
+    ans="y"
     case "$ans" in
         y | Y)
             rm -rf linux-sgx/
@@ -74,7 +74,7 @@ EOF
 
 if [[ -e "/opt/intel/sgxsdk/" ]]; then
     echo -n "Intel SGX SDK already installed. Reinstall? [y/n]: "
-    read -r ans
+    ans="y"
     case "$ans" in
         y | Y)
             sudo /opt/intel/sgxsdk/uninstall.sh
@@ -106,13 +106,13 @@ install_sgx_psw() {
     make psw_install_pkg -j7 -l6
     echo "Finished psw installer compilation"
     echo "Running psw installer"
-    sudo ./linux/installer/bin/sgx_linux_x64_psw_2.25.100.3.bin
+    sudo ./linux/installer/bin/sgx_linux_x64_psw_2.25.100.3.bin --no-start-aesm
     cd ..
 }
 
 if [[ -e "/opt/intel/sgxpsw/" ]]; then
     echo -n "Intel SGX PSW already installed. Reinstall? [y/n]: "
-    read -r ans
+    ans="y"
     case "$ans" in
         y | Y)
             sudo /opt/intel/sgxpsw/uninstall.sh

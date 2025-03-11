@@ -18,7 +18,7 @@ setup_sgx_ssl_repository() {
         exit
     fi
     cd intel-sgx-ssl/
-    git --no-advice checkout support_tls_openssl3
+    git checkout support_tls_openssl3
     cd openssl_source/
     wget "https://github.com/openssl/openssl/releases/download/openssl-3.0.12/openssl-3.0.12.tar.gz"
     cd ../..
@@ -26,7 +26,7 @@ setup_sgx_ssl_repository() {
 
 if [[ -e "intel-sgx-ssl/" ]]; then
     echo -n "Intel SGX SSL git repository already exists. Overwrite? [y/n]: "
-    read -r ans
+    ans="y"
     case "$ans" in
         y | Y)
             rm -rf intel-sgx-ssl/
@@ -70,7 +70,7 @@ patch_and_install_sgx_ssl() {
 
 if [[ -e "/opt/intel/sgxssl/" ]]; then
     echo -n "Intel SGX SSL already installed. Reinstall? [y/n]: "
-    read -r ans
+    ans="y"
     case "$ans" in
         y | Y)
             sudo rm -rf /opt/intel/sgxssl

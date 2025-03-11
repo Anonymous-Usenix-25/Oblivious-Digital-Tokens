@@ -10,7 +10,7 @@ setup_and_patch_openssl_repository() {
         exit
     fi
     cd openssl/
-    git --no-advice checkout 707b54bee2
+    git checkout 707b54bee2
     echo "Patching repository with ODT server functionality"
     git apply ../../patches/ODT-server.patch
     echo "Compiling OpenSSL"
@@ -20,7 +20,7 @@ setup_and_patch_openssl_repository() {
 
 if [[ -e "openssl/" ]]; then
     echo -n "OpenSSL git repository already exists. Overwrite and patch? [y/n]: "
-    read -r ans
+    ans="y"
     case "$ans" in
         y | Y)
             rm -rf openssl/
