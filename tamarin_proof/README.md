@@ -10,7 +10,7 @@ In the directory you can find the following files:
 | `prove.sh` | Script you can use to verify automatically constructable lemmas. |
 | `expected_log_output.txt` | The last 43 lines of the `proof2.log` file that is generated after running `prove.sh`. |
 
-The non-automatically constructable lemma is used to check if the protocol model is executable, i.e. there exists an honest execution of the protocol without adversary interference.
+The non-automatically constructable lemma is used to check if the protocol model is executable, i.e., there exists an honest execution of the protocol without adversary interference.
 The lemma is not used in the proof of the binding integrity property and serves only as a check that the protocol model works.
 
 # Setup
@@ -71,7 +71,7 @@ interface, you should perform the following:
 
 While not necessary, you can perform the proof manually by starting Tamarin in interactive mode and clicking on `ODT` next to `model.spthy`.
 Next, you must repeat the following:
-- Click on one of the `by sorry` links on the left side,
+- Click on one of the `by sorry` links on the left side.
 - Press `a` on the keyboard to start the autoprover.
 - Once the autoprover is complete, Tamarin should focus on the next `by sorry` link.
 
