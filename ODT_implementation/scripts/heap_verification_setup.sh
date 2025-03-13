@@ -18,7 +18,7 @@ sed -i "s/ODT_VERIFY_STACK=[[:digit:]]*/ODT_VERIFY_STACK=0/" Configure
 
 if [[ ! (-e "/opt/intel/sgxsdk" && -e "/opt/intel/sgxpsw") ]]; then
     echo "Error: Intel SGX SDK or SGX PSW not found. Ensure that they are installed before proceeding."
-    exit
+    exit 1
 else
     echo "Sourced SGX SDK environment"
     source /opt/intel/sgxsdk/environment

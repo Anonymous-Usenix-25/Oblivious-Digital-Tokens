@@ -13,7 +13,7 @@ case "$ans" in
 
     *)
         echo "Error"
-        exit
+        exit 1
         ;;
 esac
 

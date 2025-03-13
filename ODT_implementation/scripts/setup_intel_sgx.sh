@@ -10,7 +10,7 @@ setup_sgx_sdk_repository() {
         echo "Finished cloning repository"
     else
         echo "Error: failed to clone Intel SGX SDK repository"
-        exit
+        exit 1
     fi
     cd linux-sgx/
     git checkout 7385e10ce1106215d15f874a024ca224c7417eea
@@ -40,7 +40,7 @@ if [[ -e "linux-sgx/" ]]; then
 
         *)
             echo "Error"
-            exit
+            exit 1
             ;;
     esac
 else
@@ -87,7 +87,7 @@ if [[ -e "/opt/intel/sgxsdk/" ]]; then
 
         *)
             echo "Error"
-            exit
+            exit 1
             ;;
     esac
 else
@@ -125,7 +125,7 @@ if [[ -e "/opt/intel/sgxpsw/" ]]; then
 
         *)
             echo "Error"
-            exit
+            exit 1
             ;;
     esac
 else

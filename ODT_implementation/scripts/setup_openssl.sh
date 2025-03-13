@@ -7,10 +7,10 @@ setup_openssl_repository() {
         echo "Finished cloning repository"
     else
         echo "Error: failed to clone OpenSSL repository"
-        exit
+        exit 1
     fi
     cd openssl_normal/
-    git --no-advice checkout 707b54bee2
+    git checkout 707b54bee2
     echo "Compiling OpenSSL"
     ./config
     make all -j7 -l6
@@ -31,7 +31,7 @@ if [[ -e "openssl_normal/" ]]; then
 
         *)
             echo "Error"
-            exit
+            exit 1
             ;;
     esac
 else

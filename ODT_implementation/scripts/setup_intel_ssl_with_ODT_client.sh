@@ -5,7 +5,7 @@ echo "This script will guide you through the setup process for the Intel SGX SSL
 
 if [[ ! (-e "/opt/intel/sgxsdk" && -e "/opt/intel/sgxpsw") ]]; then
     echo "Error: Intel SGX SDK or SGX PSW not found. Ensure that they are installed before proceeding."
-    exit
+    exit 1
 else
     source /opt/intel/sgxsdk/environment
 fi
@@ -15,7 +15,7 @@ setup_sgx_ssl_repository() {
         echo "Finished cloning repository"
     else
         echo "Error: failed to clone Intel SGX SSL repository"
-        exit
+        exit 1
     fi
     cd intel-sgx-ssl/
     git checkout support_tls_openssl3
@@ -39,7 +39,7 @@ if [[ -e "intel-sgx-ssl/" ]]; then
 
         *)
             echo "Error"
-            exit
+            exit 1
             ;;
     esac
 else
@@ -83,7 +83,7 @@ if [[ -e "/opt/intel/sgxssl/" ]]; then
 
         *)
             echo "Error"
-            exit
+            exit 1
             ;;
     esac
 else

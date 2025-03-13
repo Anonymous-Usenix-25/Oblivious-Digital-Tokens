@@ -22,8 +22,9 @@ In the following sections, we describe how to install these dependencies, how to
 
 # Setup
 This is the high-level procedure to setup the project:
-1. Install the Intel SGX SDK driver (see subsection below)
-2. Go into the `scripts/` directory and run the `./setup.sh` script to
+1. Install a CMake version that is newer than `3.29`
+2. Install the Intel SGX SDK driver (see subsection below)
+3. Go into the `scripts/` directory and run the `./setup.sh` script to
    install and setup the following:
    - Build tools for Intel SGX (for Ubuntu)
    - Intel SGX SDK library

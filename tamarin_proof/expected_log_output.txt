@@ -1,0 +1,43 @@
+==============================================================================
+summary of summaries:
+
+analyzed: partial-proof.spthy
+
+  output:          proof2.spthy
+  processing time: 1060.26s
+  
+  auto_adversaryCannotCompromiseNPLTK (all-traces): verified (2 steps)
+  auto_adversaryCannotKnowAggressorLtk (all-traces): verified (8 steps)
+  auto_adversaryCannotRecoverAggressorDHShare (all-traces): verified (2 steps)
+  auto_adversaryCannotFindPropertiesFromAggressor (all-traces): verified (3 steps)
+  auto_aggressorDHKeyIsUnique (all-traces): verified (65 steps)
+  auto_adversaryCannotLearnOTEELtk (all-traces): verified (2 steps)
+  auto_OTEEOrder (all-traces): verified (10 steps)
+  auto_adversaryCannotKnowEnclaveShareBeforeReveal (all-traces): verified (17 steps)
+  auto_adversaryKnowsOTEEDHSecretAfterReveal (all-traces): verified (12 steps)
+  auto_adversaryCannotLearnDeviceDHShareBeforeEnd (all-traces): verified (7 steps)
+  auto_ifOTEEConnectsToServerThenShareMustBeOutputByTheServer (all-traces): verified (7 steps)
+  auto_OTEEServerNonceSource (all-traces): verified (35 steps)
+  auto_ifServerAndOTEEDeriveSameKeyTheAdversaryCannotLearnIt (all-traces): verified (331 steps)
+  auto_ifServerAndOTEEDeriveSameKeyTheAdversaryCannotLearnServerHandshakeSecret (all-traces): verified (269 steps)
+  auto_ifServerAndOTEEDeriveSameKeyTheAdversaryCannotLearnClientHandshakeSecret (all-traces): verified (207 steps)
+  auto_twoOTEEsCannotHaveSameDHE (all-traces): verified (271 steps)
+  auto_twoAggrCannotHaveSameDHE (all-traces): verified (193 steps)
+  auto_ifServerAndOTEEHaveSameKeyThenTheyCommunicated (all-traces): verified (11 steps)
+  auto_adversaryCannotKnowDHEBeforeReveal (all-traces): verified (296 steps)
+  auto_AdversaryNeverLearnsT (all-traces): verified (2 steps)
+  auto_AdversaryNeverLearnsInvT (all-traces): verified (2 steps)
+  auto_AdversaryNeverLearnsS (all-traces): verified (2 steps)
+  auto_OTEEExponentsLemma (all-traces): verified (34 steps)
+  auto_AdversaryNeverLearnsG2TBeforeT (all-traces): verified (208 steps)
+  auto_AdversaryNeverLearnsG2InvTBeforeT (all-traces): verified (13 steps)
+  auto_ImpossibleBeforeXCH (all-traces): verified (7 steps)
+  auto_ImpossibleBeforeUCH (all-traces): verified (37 steps)
+  auto_adversaryCannotKnowMeasurementPositionBeforeMeasurement (all-traces): verified (539 steps)
+  auto_token_integrity (all-traces): verified (5 steps)
+  auto_measurementPositionIsUnique (all-traces): verified (5 steps)
+  auto_succeessfultVerificationImpliesEnclaveMeasuredCorrectProperties (all-traces): verified (614 steps)
+  auto_binding_integrity (all-traces): verified (69 steps)
+  executable (exists-trace): verified (49 steps)
+
+==============================================================================

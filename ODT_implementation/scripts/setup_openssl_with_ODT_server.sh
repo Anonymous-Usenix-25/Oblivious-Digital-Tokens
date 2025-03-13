@@ -7,7 +7,7 @@ setup_and_patch_openssl_repository() {
         echo "Finished cloning repository"
     else
         echo "Error: failed to clone OpenSSL repository"
-        exit
+        exit 1
     fi
     cd openssl/
     git checkout 707b54bee2
@@ -33,7 +33,7 @@ if [[ -e "openssl/" ]]; then
 
         *)
             echo "Error"
-            exit
+            exit 1
             ;;
     esac
 else

@@ -4,7 +4,7 @@ echo "This script will setup the agent application."
 
 if [[ ! (-e "/opt/intel/sgxsdk" && -e "/opt/intel/sgxpsw") ]]; then
     echo "Error: Intel SGX SDK or SGX PSW not found. Ensure that they are installed before proceeding."
-    exit
+    exit 1
 else
     source /opt/intel/sgxsdk/environment
 fi

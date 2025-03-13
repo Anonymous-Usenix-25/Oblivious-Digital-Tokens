@@ -33,7 +33,7 @@ if [[ -e "results/" ]]; then
 
         *)
             echo "Error"
-            exit
+            exit 1
             ;;
     esac
 else

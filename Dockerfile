@@ -18,4 +18,4 @@ RUN ./setup.sh
 # docker build -t setup_complete
 
 # If you are using the SGX out-of-tree driver, you can start the built image as
-# docker run -it --device=/dev/isgx --device=/dev/sgx/provision -v /var/run/aesmd/aesm.socket:/var/run/aesmd/aesm.socket setup_complete
+# docker run -it --device=/dev/isgx -v /var/run/aesmd/aesm.socket:/var/run/aesmd/aesm.socket setup_complete
