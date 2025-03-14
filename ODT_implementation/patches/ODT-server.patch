@@ -8860,7 +8860,7 @@ index 49c408aba4..0b4c060415 100644
 +      // heartbeat message.
 +
 +      // Prepare hash for the handshake secret
-+      EVP_MD_CTX *ctx;
++      {EVP_MD_CTX *ctx;
 +      const EVP_MD *md;
 +      ctx = EVP_MD_CTX_new();
 +      md = EVP_get_digestbyname("sha512");
@@ -8941,13 +8941,13 @@ index 49c408aba4..0b4c060415 100644
 +      if (good) printf("ODT verification success\n\n\n");
 +      else printf("ODT verification failure\n\n\n");
 +#endif
-+
++ 
 +    signature_check_fail:
 +
 +      ssl_release_record(s, rr, rr->length);
 +      goto start;
 +      //SSLfatal(s, SSL_AD_UNEXPECTED_MESSAGE, SSL_R_UNEXPECTED_RECORD);
-+      //return -1;
++      } //return -1;
      case SSL3_RT_CHANGE_CIPHER_SPEC:
      case SSL3_RT_ALERT:
      case SSL3_RT_HANDSHAKE:
@@ -8960,10 +8960,10 @@ index d1497b115b..43171e9e37 100644
          break;
  
 +
-+    case SSL_CTRL_DTLS_EXT_SEND_HEARTBEAT:
++    case SSL_CTRL_DTLS_EXT_SEND_HEARTBEAT: {
 +      size_t written;
 +      ret = ssl3_heartbeat(s, &written);
-+      break;
++      break; }
 +
 +      /*
 +    case SSL_CTRL_GET_DTLS_EXT_HEARTBEAT_PENDING:

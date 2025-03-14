@@ -20,8 +20,9 @@ cd "${OPENSSL_SERVER_DIR}"
 if [[ ! -e "server.key" ]]; then
     echo "No existing server key and certificate found"
     echo "Generating new server key and certificate"
+    export LD_LIBRARY_PATH=$(pwd)
     ./apps/openssl genrsa -out server.key 4096
-    ./apps/openssl req -new -x509 -key server.key -out server-cert.pem -days 365 <<EOF
+    ./apps/openssl req -new -x509 -key server.key -out server-cert.pem -days 365 -config $(pwd)/apps/openssl.cnf <<EOF
 
 
 
@@ -31,6 +32,7 @@ if [[ ! -e "server.key" ]]; then
 
 
 EOF
+   unset LD_LIBRARY_PATH
 else
     echo "Found existing server key and certificate"
 fi
@@ -52,6 +54,8 @@ echo "Re-compiling the OpenSSL client library"
 make all -j7 -l6 || true
 make all -j7 -l6 || true
 
+
+export LD_LIBRARY_PATH="${SCRIPTS_DIR}/openssl/"
 echo "Compiling the Intel SGX SSL library"
 cd "${INTEL_SGX_SSL_DIR}/Linux"
 make all -j7 -l6
@@ -88,8 +92,8 @@ cd $ODT_SERVER_DIR
 if [[ ! -e "server.key" ]]; then
     echo "No existing server key and certificate found"
     echo "Generating new server key and certificate"
-    ./apps/openssl genrsa -out server.key 4096
-    ./apps/openssl req -new -x509 -key server.key -out server-cert.pem -days 365 <<EOF
+    export LD_LIBRARY_PATH=$(pwd)
+    ./apps/openssl req -new -x509 -key server.key -out server-cert.pem -days 365 -config $(pwd)/apps/openssl.cnf <<EOF
 
 
 
@@ -99,6 +103,7 @@ if [[ ! -e "server.key" ]]; then
 
 
 EOF
+    unset LD_LIBRARY_PATH
 else
     echo "Found existing server key and certificate"
 fi

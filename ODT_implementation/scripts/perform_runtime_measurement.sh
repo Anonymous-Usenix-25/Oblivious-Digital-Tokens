@@ -59,7 +59,7 @@ echo "Performing measurement for OpenSSL client with OpenSSL server"
 "${TIMING_MEASUREMENT_DIR}"/openssl-client.sh "${OPENSSL_SERVER_DIR}" > "${RESULTS_DIR}"/OpenSSL_client_OpenSSL_server.txt
 
 echo "Stopping normal OpenSSL server"
-kill "${SERVER_PID}"
+kill "${SERVER_PID}" || true
 
 
 echo "Next, we perform all measurements with an ODT server"
@@ -85,7 +85,7 @@ echo "Performing measurement for OpenSSL client with ODT server"
 
 
 echo "Stopping ODT server"
-kill "${SERVER_PID}"
+kill "${SERVER_PID}" || true
 
 # Delete temporary file
 rm "${RESULTS_DIR}"/ODT_server_ODT_generation.txt.tmp

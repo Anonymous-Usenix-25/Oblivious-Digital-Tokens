@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 
 SCRIPTS_DIR=$(pwd)
 OPENSSL_SERVER_DIR="${SCRIPTS_DIR}/openssl/"
@@ -62,8 +62,9 @@ cd $OPENSSL_SERVER_DIR
 if [[ ! -e "server.key" ]]; then
     echo "No existing server key and certificate found"
     echo "Generating new server key and certificate"
+    export LD_LIBRARY_PATH=$(pwd)
     ./apps/openssl genrsa -out server.key 4096
-    ./apps/openssl req -new -x509 -key server.key -out server-cert.pem -days 365 <<EOF
+    ./apps/openssl req -new -x509 -key server.key -out server-cert.pem -days 365 -config $(pwd)/apps/openssl.cnf<<EOF
 
 
 
@@ -73,6 +74,7 @@ if [[ ! -e "server.key" ]]; then
 
 
 EOF
+    unset LD_LIBRARY_PATH
 else
     echo "Found existing server key and certificate"
 fi
