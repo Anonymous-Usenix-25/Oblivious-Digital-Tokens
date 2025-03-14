@@ -23,7 +23,7 @@ In the following sections, we describe how to install these dependencies, how to
 
 # Setup
 There are three ways to setup an ODT implementation:
-1. Use a Docker image where the setup is complete.
+1. Use a Docker image where the setup is complete. (recommended)
 2. Build the Docker image yourself.
 3. Compile and install the ODT implementation directly on your system.
 
