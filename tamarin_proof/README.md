@@ -4,7 +4,7 @@ In the directory you can find the following files:
 | Path | Description |
 | --- | --- |
 | `model.spthy` | Tamarin model of the ODT protocol. |
-| `proof.spthy` | The complete proof of all lemmas for the ODT protocol. |
+| `proof.spthy` | The complete proof of all Tamarin lemmas for the ODT protocol. |
 | `partial-proof.spthy` | Proof of the ODT protocol where a non-automatically constructable lemma is already complete. |
 | `myoracle.py` | Custom heuristic for proofs. |
 | `prove.sh` | Script you can use to verify automatically constructable lemmas. |

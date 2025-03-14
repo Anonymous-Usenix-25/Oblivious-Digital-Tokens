@@ -2,6 +2,10 @@
 
 echo "This script will guide you through the setup process for the OpenSSL library that is modified to work with ODTs."
 
+if [[ ! -z "${DEPLOY_ENV}" ]]; then
+    source /etc/profile
+fi
+
 setup_and_patch_openssl_repository() {
     if git clone https://github.com/openssl/openssl/; then
         echo "Finished cloning repository"
@@ -19,7 +23,7 @@ setup_and_patch_openssl_repository() {
 }
 
 if [[ -e "openssl/" ]]; then
-    if [[ -z "${DEPLOY_ENV}" ]]; then
+    if [[ ! -z "${DEPLOY_ENV}" ]]; then
         ans="y"
     else
         echo -n "OpenSSL git repository already exists. Overwrite and patch? [y/n]: "

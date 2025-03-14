@@ -10,8 +10,9 @@ The repository is organized as follows:
 | `tamarin_proof/` | Contains our Tamarin protocol model as well as the proof for `binding_integrity` and all auxiliary lemmas. |
 | `ODT_implementation/` | The implementation of our protocol and the timing measurement scripts. |
 | `ODT_implementation/complete-results.ods` | The file containing the timing measurement results and the raw data. |
+| `Dockerfile` | A setup script for a Docker container of our ODT implementation. More details are given in the `ODT_implementation/README.md` file. |
 
-For additional instructions please look into the respective directories.
+For additional instructions please look into the respective directories and their `README.md` files.
 
 # System and hardware requirements
 

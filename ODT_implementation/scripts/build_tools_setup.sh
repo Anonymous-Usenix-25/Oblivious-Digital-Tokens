@@ -3,7 +3,7 @@
 echo "This script will install build tools for Ubuntu. If you are not on Ubuntu, you might need to check what build tools you will need at https://github.com/intel/linux-sgx?tab=readme-ov-file#prerequisites"
 
 # Setup build tools for Intel SGX SDK
-if [[ -z "${DEPLOY_ENV}" ]]; then
+if [[ ! -z "${DEPLOY_ENV}" ]]; then
     ans="n"
 else
     echo -n "Install build tools? [y/n]: "

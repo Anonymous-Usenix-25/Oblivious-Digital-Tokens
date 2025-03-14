@@ -2,6 +2,9 @@
 
 echo "This script will guide you through the setup process for the Intel SGX SSL library that is modified to work with ODTs."
 
+if [[ ! -z "${DEPLOY_ENV}" ]]; then
+    source /etc/profile
+fi
 
 if [[ ! (-e "/opt/intel/sgxsdk" && -e "/opt/intel/sgxpsw") ]]; then
     echo "Error: Intel SGX SDK or SGX PSW not found. Ensure that they are installed before proceeding."
@@ -25,7 +28,7 @@ setup_sgx_ssl_repository() {
 }
 
 if [[ -e "intel-sgx-ssl/" ]]; then
-    if [[ -z "${DEPLOY_ENV}" ]]; then
+    if [[ ! -z "${DEPLOY_ENV}" ]]; then
         ans="y"
     else
         echo -n "Intel SGX SSL git repository already exists. Overwrite? [y/n]: "
@@ -73,7 +76,7 @@ patch_and_install_sgx_ssl() {
 }
 
 if [[ -e "/opt/intel/sgxssl/" ]]; then
-    if [[ -z "${DEPLOY_ENV}" ]]; then
+    if [[ ! -z "${DEPLOY_ENV}" ]]; then
         ans="y"
     else
         echo -n "Intel SGX SSL already installed. Reinstall? [y/n]: "

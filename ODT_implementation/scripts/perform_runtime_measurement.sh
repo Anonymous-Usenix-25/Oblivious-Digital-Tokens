@@ -1,5 +1,9 @@
 #!/bin/bash -e
 
+if [[ ! -z "${DEPLOY_ENV}" ]]; then
+    source /etc/profile
+fi
+
 SCRIPTS_DIR=$(pwd)
 RESULTS_DIR=$(pwd)/results/
 OPENSSL_SERVER_DIR="${SCRIPTS_DIR}/openssl_normal/"
@@ -13,7 +17,7 @@ INTEL_SGX_SSL_DIR=$(pwd)
 cd ../../timing_measurement
 TIMING_MEASUREMENT_DIR=$(pwd)
 
-echo "This script will perform all timing measurements from the paper and output the results of the measurements as seen in the paper"
+echo "This script will perform all timing measurements from the paper"
 
 # Prepare directory for results
 cd "${SCRIPTS_DIR}"

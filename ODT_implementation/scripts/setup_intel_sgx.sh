@@ -2,6 +2,9 @@
 
 echo "This script will guide you through the setup process for the Intel SGX SDK and Intel SGX PSW."
 
+if [[ ! -z "${DEPLOY_ENV}" ]]; then
+    source /etc/profile
+fi
 
 # Clone the repository, checkout the correct commit and prepare the repository for compilation on Linux
 
@@ -26,7 +29,7 @@ setup_sgx_sdk_repository() {
 }
 
 if [[ -e "linux-sgx/" ]]; then
-    if [[ -z "${DEPLOY_ENV}" ]]; then
+    if [[ ! -z "${DEPLOY_ENV}" ]]; then
         ans="y"
     else
         echo -n "Intel SGX SDK git repository already exists. Overwrite and setup again? [y/n]: "
@@ -77,7 +80,7 @@ EOF
 }
 
 if [[ -e "/opt/intel/sgxsdk/" ]]; then
-    if [[ -z "${DEPLOY_ENV}" ]]; then
+    if [[ ! -z "${DEPLOY_ENV}" ]]; then
         ans="y"
     else
         echo -n "Intel SGX SDK already installed. Reinstall? [y/n]: "

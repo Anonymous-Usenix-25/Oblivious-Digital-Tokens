@@ -2,6 +2,10 @@
 
 echo "This script will guide you through the setup process for the OpenSSL library."
 
+if [[ ! -z "${DEPLOY_ENV}" ]]; then
+    source /etc/profile
+fi
+
 setup_openssl_repository() {
     if git clone https://github.com/openssl/openssl/ openssl_normal/; then
         echo "Finished cloning repository"
@@ -17,8 +21,12 @@ setup_openssl_repository() {
 }
 
 if [[ -e "openssl_normal/" ]]; then
-    echo -n "OpenSSL git repository already exists. Overwrite and patch? [y/n]: "
-    read -r ans
+    if [[ ! -z "${DEPLOY_ENV}" ]]; then
+        ans="y"
+    else
+        echo -n "OpenSSL git repository already exists. Overwrite and patch? [y/n]: "
+        read -r ans
+    fi
     case "$ans" in
         y | Y)
             rm -rf openssl_normal/
