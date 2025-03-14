@@ -26,8 +26,12 @@ setup_sgx_sdk_repository() {
 }
 
 if [[ -e "linux-sgx/" ]]; then
-    echo -n "Intel SGX SDK git repository already exists. Overwrite and setup again? [y/n]: "
-    ans="y"
+    if [[ -z "${DEPLOY_ENV}" ]]; then
+        ans="y"
+    else
+        echo -n "Intel SGX SDK git repository already exists. Overwrite and setup again? [y/n]: "
+        read -r ans
+    fi
     case "$ans" in
         y | Y)
             rm -rf linux-sgx/
@@ -73,8 +77,12 @@ EOF
 }
 
 if [[ -e "/opt/intel/sgxsdk/" ]]; then
-    echo -n "Intel SGX SDK already installed. Reinstall? [y/n]: "
-    ans="y"
+    if [[ -z "${DEPLOY_ENV}" ]]; then
+        ans="y"
+    else
+        echo -n "Intel SGX SDK already installed. Reinstall? [y/n]: "
+        read -r ans
+    fi
     case "$ans" in
         y | Y)
             sudo /opt/intel/sgxsdk/uninstall.sh

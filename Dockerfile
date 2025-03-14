@@ -4,6 +4,9 @@ FROM archlinux:base-20250302.0.316047
 # Install dependencies
 RUN pacman --noconfirm -Syy git base-devel python wget unzip pkgconf ocamlbuild cmake protobuf bc
 
+# Set environment variable to make scripts non-interactive
+ENV DEPLOY_ENV=docker
+
 # Install app
 COPY ODT_implementation/ /ODT_implementation
 

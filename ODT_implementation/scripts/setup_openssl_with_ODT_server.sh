@@ -19,8 +19,12 @@ setup_and_patch_openssl_repository() {
 }
 
 if [[ -e "openssl/" ]]; then
-    echo -n "OpenSSL git repository already exists. Overwrite and patch? [y/n]: "
-    ans="y"
+    if [[ -z "${DEPLOY_ENV}" ]]; then
+        ans="y"
+    else
+        echo -n "OpenSSL git repository already exists. Overwrite and patch? [y/n]: "
+        read -r ans
+    fi
     case "$ans" in
         y | Y)
             rm -rf openssl/

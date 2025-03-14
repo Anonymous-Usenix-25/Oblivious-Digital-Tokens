@@ -25,8 +25,12 @@ setup_sgx_ssl_repository() {
 }
 
 if [[ -e "intel-sgx-ssl/" ]]; then
-    echo -n "Intel SGX SSL git repository already exists. Overwrite? [y/n]: "
-    ans="y"
+    if [[ -z "${DEPLOY_ENV}" ]]; then
+        ans="y"
+    else
+        echo -n "Intel SGX SSL git repository already exists. Overwrite? [y/n]: "
+        read -r ans
+    fi
     case "$ans" in
         y | Y)
             rm -rf intel-sgx-ssl/
@@ -69,8 +73,12 @@ patch_and_install_sgx_ssl() {
 }
 
 if [[ -e "/opt/intel/sgxssl/" ]]; then
-    echo -n "Intel SGX SSL already installed. Reinstall? [y/n]: "
-    ans="y"
+    if [[ -z "${DEPLOY_ENV}" ]]; then
+        ans="y"
+    else
+        echo -n "Intel SGX SSL already installed. Reinstall? [y/n]: "
+        read -r ans
+    fi
     case "$ans" in
         y | Y)
             sudo rm -rf /opt/intel/sgxssl
