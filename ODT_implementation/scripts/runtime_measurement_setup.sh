@@ -13,9 +13,6 @@ INTEL_SGX_SSL_DIR=$(pwd)
 echo "This script will configure the ODT implementation for timing measurement"
 echo "For representative testing, we first setup an unmodified OpenSSL installation using the same version we use for the ODT server"
 
-cd "${SCRIPTS_DIR}"
-./setup_openssl.sh
-
 cd "${OPENSSL_SERVER_DIR}"
 if [[ ! -e "server.key" ]]; then
     echo "No existing server key and certificate found"

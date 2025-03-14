@@ -7,3 +7,4 @@ echo "This script will go through all of the setup scripts in order. It will als
 ./setup_intel_ssl_with_ODT_client.sh
 ./setup_openssl_with_ODT_server.sh
 ./setup_agent_application.sh
+./setup_openssl.sh
